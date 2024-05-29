@@ -13,9 +13,16 @@ import (
 	"os"
 
 	"golang.org/x/crypto/blake2s"
+	"golang.org/x/crypto/sha3"
 )
 
 const bufferSize = 65536
+
+// SHA3512Reader returns SHA3-512 checksum of content in reader
+func SHA3512Reader(reader io.Reader) (string, error) {
+	hash := sha3.New512()
+	return sumReader(hash, reader)
+}
 
 // MD5sumReader returns MD5 checksum of content in reader
 func MD5sumReader(reader io.Reader) (string, error) {
@@ -68,6 +75,11 @@ func sumReader(hashAlgorithm hash.Hash, reader io.Reader) (string, error) {
 			return "", err
 		}
 	}
+}
+
+// SHA3512sum returns SHA3-512 checksum of filename
+func SHA3512sum(filename string) (string, error) {
+	return sum(sha3.New512(), filename)
 }
 
 // MD5sum returns MD5 checksum of filename

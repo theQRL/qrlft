@@ -36,6 +36,10 @@ func main() {
 	app := &cli.App{
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
+				Name:  "sha3-512",
+				Usage: "hash with SHA3-512",
+			},
+			&cli.BoolFlag{
 				Name:  "sha256",
 				Usage: "hash with SHA256",
 			},
@@ -72,6 +76,19 @@ func main() {
 			if file == "" && ctx.Bool("salt") {
 				return cli.Exit("Please specify a salt size: [eg: qrlft --salt 16]", 81)
 			}
+			// sha3-512
+			if ctx.Bool("sha3-512") {
+				if !ctx.Bool("quiet") {
+					fmt.Printf("SHA3-512 checksum of %s\n", file)
+				}
+				x, err := checksum.SHA3512sum(file)
+				// if file doesn't exist return an error
+				if err != nil {
+					return cli.Exit("File "+file+" not found", 83)
+				}
+				return cli.Exit(x, 0)
+			}
+
 			// sha256
 			if ctx.Bool("sha256") {
 				if !ctx.Bool("quiet") {
