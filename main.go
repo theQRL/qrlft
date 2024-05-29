@@ -21,6 +21,14 @@ func generateRandomSalt(saltSize int) []byte {
 	return salt
 }
 
+func output(filename string, hash string, quiet bool) {
+	if !quiet {
+		fmt.Printf("%s %s\n", hash, filename)
+		return
+	}
+	fmt.Printf("%s\n", hash)
+}
+
 //
 // func hashWithSalt() {
 //   data := []byte("Hello, World!")
@@ -69,104 +77,99 @@ func main() {
 			},
 		},
 		Action: func(ctx *cli.Context) error {
-			file := ctx.Args().Get(0)
-			if file == "" && !ctx.Bool("salt") {
+			action := false
+			files := ctx.Args().Slice()
+			if len(files) == 0 && !ctx.Bool("salt") {
 				return cli.Exit("No file provided", 82)
 			}
-			if file == "" && ctx.Bool("salt") {
+			if len(files) == 0 && ctx.Bool("salt") {
 				return cli.Exit("Please specify a salt size: [eg: qrlft --salt 16]", 81)
 			}
-			// sha3-512
-			if ctx.Bool("sha3-512") {
-				if !ctx.Bool("quiet") {
-					fmt.Printf("SHA3-512 checksum of %s\n", file)
+			for _, file := range files {
+				file := file
+
+				// sha3-512
+				if ctx.Bool("sha3-512") {
+					x, err := checksum.SHA3512sum(file)
+					// if file doesn't exist return an error
+					if err != nil {
+						return cli.Exit("File "+file+" not found", 83)
+					}
+					output(file, x, ctx.Bool("quiet"))
+					action = true
 				}
-				x, err := checksum.SHA3512sum(file)
-				// if file doesn't exist return an error
-				if err != nil {
-					return cli.Exit("File "+file+" not found", 83)
+
+				// sha256
+				if ctx.Bool("sha256") {
+					x, err := checksum.SHA256sum(file)
+					// if file doesn't exist return an error
+					if err != nil {
+						return cli.Exit("File "+file+" not found", 83)
+					}
+					output(file, x, ctx.Bool("quiet"))
+					action = true
 				}
-				return cli.Exit(x, 0)
+
+				// md5
+				if ctx.Bool("md5") {
+					x, err := checksum.MD5sum(file)
+					// if file doesn't exist return an error
+					if err != nil {
+						return cli.Exit("File "+file+" not found", 83)
+					}
+					output(file, x, ctx.Bool("quiet"))
+					action = true
+				}
+
+				// crc32
+				if ctx.Bool("crc32") {
+					x, err := checksum.CRC32(file)
+					// if file doesn't exist return an error
+					if err != nil {
+						return cli.Exit("File "+file+" not found", 83)
+					}
+					output(file, x, ctx.Bool("quiet"))
+					action = true
+				}
+
+				// sha1
+				if ctx.Bool("sha1") {
+					x, err := checksum.SHA1sum(file)
+					// if file doesn't exist return an error
+					if err != nil {
+						return cli.Exit("File "+file+" not found", 83)
+					}
+					output(file, x, ctx.Bool("quiet"))
+					action = true
+				}
+
+				// blake2s
+				if ctx.Bool("blake2s") {
+					x, err := checksum.Blake2s256(file)
+					// if file doesn't exist return an error
+					if err != nil {
+						return cli.Exit("File "+file+" not found", 83)
+					}
+					output(file, x, ctx.Bool("quiet"))
+					action = true
+				}
+
+				// just make some salt
+				if ctx.Bool("salt") {
+					saltSize, _ := strconv.Atoi(ctx.Args().Get(0))
+					salt := generateRandomSalt(saltSize)
+					if !ctx.Bool("quiet") {
+						fmt.Printf("Generating %d bytes of salt as a hexstring\n", saltSize)
+					}
+					fmt.Printf("%s\n", hex.EncodeToString(salt))
+					action = true
+				}
 			}
-
-			// sha256
-			if ctx.Bool("sha256") {
-				if !ctx.Bool("quiet") {
-					fmt.Printf("SHA256 checksum of %s\n", file)
-				}
-				x, err := checksum.SHA256sum(file)
-				// if file doesn't exist return an error
-				if err != nil {
-					return cli.Exit("File "+file+" not found", 83)
-				}
-				return cli.Exit(x, 0)
+			if action {
+				return cli.Exit("", 0)
 			}
-
-			// md5
-			if ctx.Bool("md5") {
-				if !ctx.Bool("quiet") {
-					fmt.Printf("MD5 checksum of %s\n", file)
-				}
-				x, err := checksum.MD5sum(file)
-				// if file doesn't exist return an error
-				if err != nil {
-					return cli.Exit("File "+file+" not found", 83)
-				}
-				return cli.Exit(x, 0)
-			}
-
-			// crc32
-			if ctx.Bool("crc32") {
-				if !ctx.Bool("quiet") {
-					fmt.Printf("CRC32 checksum of %s\n", file)
-				}
-				x, err := checksum.CRC32(file)
-				// if file doesn't exist return an error
-				if err != nil {
-					return cli.Exit("File "+file+" not found", 83)
-				}
-				return cli.Exit(x, 0)
-			}
-
-			// sha1
-			if ctx.Bool("sha1") {
-				if !ctx.Bool("quiet") {
-					fmt.Printf("SHA1 checksum of %s\n", file)
-				}
-				x, err := checksum.SHA1sum(file)
-				// if file doesn't exist return an error
-				if err != nil {
-					return cli.Exit("File "+file+" not found", 83)
-				}
-				return cli.Exit(x, 0)
-			}
-
-			// blake2s
-			if ctx.Bool("blake2s") {
-				if !ctx.Bool("quiet") {
-					fmt.Printf("BLAKE2s checksum of %s\n", file)
-				}
-				x, err := checksum.Blake2s256(file)
-				// if file doesn't exist return an error
-				if err != nil {
-					return cli.Exit("File "+file+" not found", 83)
-				}
-				return cli.Exit(x, 0)
-			}
-
-			// just make some salt
-			if ctx.Bool("salt") {
-				saltSize, _ := strconv.Atoi(ctx.Args().Get(0))
-				salt := generateRandomSalt(saltSize)
-				if !ctx.Bool("quiet") {
-					fmt.Printf("Generating %d bytes of salt as a hexstring\n", saltSize)
-				}
-				return cli.Exit(hex.EncodeToString(salt), 0)
-
-			}
-
-			// no action selected
 			return cli.Exit("No action selected", 84)
+
 		},
 	}
 
