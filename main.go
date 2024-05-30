@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/theQRL/qrlft/checksum"
@@ -180,12 +181,15 @@ func main() {
 					if len(files) == 0 {
 						return cli.Exit("No file provided", 82)
 					}
+					if len(files) == 1 {
+						files, _ = filepath.Glob(files[0])
+					}
 					for _, file := range files {
 						file := file
 
 						filecheck, err := os.Open(file)
 						if err != nil {
-							return cli.Exit("Error when signing "+file, 78)
+							return cli.Exit("Error when signing "+file+" - "+err.Error(), 78)
 						}
 						defer filecheck.Close()
 
@@ -254,9 +258,25 @@ func main() {
 					if len(files) == 0 {
 						return cli.Exit("No file provided", 82)
 					}
+					if len(files) == 1 {
+						files, _ = filepath.Glob(files[0])
+					}
 					for _, file := range files {
 						file := file
+						filecheck, err := os.Open(file)
+						if err != nil {
+							return cli.Exit("Error when hashing "+file+" - "+err.Error(), 78)
+						}
+						defer filecheck.Close()
 
+						fileinfo, err := filecheck.Stat()
+						if err != nil {
+							return cli.Exit("Error when hashing "+file, 77)
+						}
+						if fileinfo.IsDir() {
+							// skip this iteration
+							continue
+						}
 						// sha3-512
 						if ctx.Bool("sha3-512") {
 							x, err := checksum.SHA3512sum(file)
