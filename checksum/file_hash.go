@@ -18,6 +18,18 @@ import (
 
 const bufferSize = 65536
 
+// Keccak-256 returns Keccak-256 checksum of content in reader
+func Keccak256Reader(reader io.Reader) (string, error) {
+	hash := sha3.NewLegacyKeccak256()
+	return sumReader(hash, reader)
+}
+
+// Keccak-512 returns Keccak-512 checksum of content in reader
+func Keccak512Reader(reader io.Reader) (string, error) {
+	hash := sha3.NewLegacyKeccak512()
+	return sumReader(hash, reader)
+}
+
 // SHA3512Reader returns SHA3-512 checksum of content in reader
 func SHA3512Reader(reader io.Reader) (string, error) {
 	hash := sha3.New512()
@@ -75,6 +87,24 @@ func sumReader(hashAlgorithm hash.Hash, reader io.Reader) (string, error) {
 			return "", err
 		}
 	}
+}
+
+// Keccak256sum returns Keccak-256 checksum of filename
+//
+// "Only use this function if you require compatibility
+// with an existing cryptosystem that uses non-standard
+// padding. All other users should use New256 instead."
+func Keccak256sum(filename string) (string, error) {
+	return sum(sha3.NewLegacyKeccak256(), filename)
+}
+
+// Keccak512sum returns Keccak-512 checksum of filename
+//
+// "Only use this function if you require compatibility
+// with an existing cryptosystem that uses non-standard
+// padding. All other users should use New512 instead."
+func Keccak512sum(filename string) (string, error) {
+	return sum(sha3.NewLegacyKeccak512(), filename)
 }
 
 // SHA3512sum returns SHA3-512 checksum of filename
