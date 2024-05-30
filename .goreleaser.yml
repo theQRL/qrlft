@@ -20,7 +20,7 @@ builds:
       - -X main.buildDate={{.Date}}
 archives:
   - format: zip
-    name_template: '{{ .Binary }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}.zip'
+    name_template: '{{ .Binary }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 
 checksum:
   name_template: '{{ .ProjectName }}_v{{ .Version }}_checksums.txt'
