@@ -19,8 +19,8 @@ builds:
       - -X main.commitSHA={{.FullCommit}}
       - -X main.buildDate={{.Date}}
 archives:
-  - format: binary
-    name_template: '{{ .Binary }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+  - format: zip
+    name_template: '{{ .Binary }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}.zip'
 
 checksum:
   name_template: '{{ .ProjectName }}_v{{ .Version }}_checksums.txt'
