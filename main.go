@@ -60,8 +60,24 @@ func main() {
 					}
 					for _, file := range files {
 						file := file
+
+						filecheck, err := os.Open(file)
+						if err != nil {
+							return cli.Exit("Error when signing "+file, 78)
+						}
+						defer filecheck.Close()
+
+						fileinfo, err := filecheck.Stat()
+						if err != nil {
+							return cli.Exit("Error when signing "+file, 77)
+						}
+						if fileinfo.IsDir() {
+							// skip this iteration
+							continue
+						}
 						signature, err := sign.SignFile(file, hexseed)
 						if err != nil {
+							fmt.Printf("Error: %a", err)
 							return cli.Exit("Error when signing "+file, 79)
 						}
 						output(file, signature, ctx.Bool("quiet"))

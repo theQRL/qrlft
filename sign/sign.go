@@ -2,6 +2,7 @@ package sign
 
 import (
 	"encoding/hex"
+	"errors"
 	"os"
 
 	"github.com/theQRL/go-qrllib/dilithium"
@@ -30,6 +31,10 @@ func SignFile(filename string, hexseed string) (string, error) {
 	fileinfo, err := file.Stat()
 	if err != nil {
 		return "", err
+	}
+
+	if fileinfo.IsDir() {
+		return "", errors.New("file is a directory")
 	}
 
 	filesize := fileinfo.Size()
