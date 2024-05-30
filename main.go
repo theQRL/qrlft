@@ -8,7 +8,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/theqrl/qrlft/checksum"
+	"github.com/theQRL/qrlft/checksum"
+	"github.com/theQRL/qrlft/sign"
 	"github.com/urfave/cli/v2"
 )
 
@@ -29,22 +30,45 @@ func output(filename string, hash string, quiet bool) {
 	fmt.Printf("%s\n", hash)
 }
 
-//
-// func hashWithSalt() {
-//   data := []byte("Hello, World!")
-// 	salt := generateRandomSalt(16)
-// 	hash := sha256.Sum256(data)
-//   hashWithSalt := sha256.Sum256(append(data, salt...))
-//   fmt.Printf("SHA-256 hash: %x\n", hash)
-// 	fmt.Printf("Salt: %x\n", salt)
-// 	fmt.Printf("SHA-256 hash with salt: %x\n", hashWithSalt)
-// }
-
 func main() {
 	app := &cli.App{
 		Name:  "qrlft",
 		Usage: "QRL File Tools - See docs at https://github.com/theQRL/qrlft",
 		Commands: []*cli.Command{
+			{
+				Name:  "sign",
+				Usage: "signs a file with a dilithium signature [eg. qrlft sign --hexseed=f29f58aff0b00de2844f7e20bd9eeaacc379150043beeb328335817512b29fbb7184da84a092f842b2a06d72a24a5d28 doc.txt",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "hexseed",
+						Aliases: []string{"hs"},
+						Usage:   "Signs file using the private key `SEED`",
+					},
+					&cli.BoolFlag{
+						Name:  "quiet",
+						Usage: "just output the signature, no filename",
+					},
+				},
+				Action: func(ctx *cli.Context) error {
+					if ctx.String("hexseed") == "" {
+						return cli.Exit("No hexseed provided", 78)
+					}
+					hexseed := ctx.String("hexseed")
+					files := ctx.Args().Slice()
+					if len(files) == 0 {
+						return cli.Exit("No file provided", 82)
+					}
+					for _, file := range files {
+						file := file
+						signature, err := sign.SignFile(file, hexseed)
+						if err != nil {
+							return cli.Exit("Error when signing "+file, 79)
+						}
+						output(file, signature, ctx.Bool("quiet"))
+					}
+					return cli.Exit("", 0)
+				},
+			},
 			{
 				Name:  "hash",
 				Usage: "hashes a file with algorithm selected in options [eg. qrlft hash --sha256 doc.txt]",
@@ -82,10 +106,6 @@ func main() {
 						Usage: "hash with BLAKE2s",
 					},
 					&cli.BoolFlag{
-						Name:  "salt",
-						Usage: "create some random salt",
-					},
-					&cli.BoolFlag{
 						Name:  "quiet",
 						Usage: "just output the hash, no filename",
 					},
@@ -93,11 +113,8 @@ func main() {
 				Action: func(ctx *cli.Context) error {
 					action := false
 					files := ctx.Args().Slice()
-					if len(files) == 0 && !ctx.Bool("salt") {
+					if len(files) == 0 {
 						return cli.Exit("No file provided", 82)
-					}
-					if len(files) == 0 && ctx.Bool("salt") {
-						return cli.Exit("Please specify a salt size: [eg: qrlft --salt 16]", 81)
 					}
 					for _, file := range files {
 						file := file
@@ -189,23 +206,28 @@ func main() {
 							output(file, x, ctx.Bool("quiet"))
 							action = true
 						}
-
-						// just make some salt
-						if ctx.Bool("salt") {
-							saltSize, _ := strconv.Atoi(ctx.Args().Get(0))
-							salt := generateRandomSalt(saltSize)
-							if !ctx.Bool("quiet") {
-								fmt.Printf("Generating %d bytes of salt as a hexstring\n", saltSize)
-							}
-							fmt.Printf("%s\n", hex.EncodeToString(salt))
-							action = true
-						}
 					}
 
 					if action {
 						return cli.Exit("", 0)
 					}
 					return cli.Exit("No action selected", 84)
+				},
+			},
+			{
+				Name:  "salt",
+				Usage: "generates user-specified bytes random salt [eg. qrlft salt 16]",
+				Action: func(ctx *cli.Context) error {
+					saltSize, _ := strconv.Atoi(ctx.Args().Get(0))
+					if saltSize == 0 {
+						return cli.Exit("Please specify a salt size: [eg: qrlft salt 16]", 81)
+					}
+					salt := generateRandomSalt(saltSize)
+					if !ctx.Bool("quiet") {
+						fmt.Printf("Generating random %d bytes of salt as a hexstring\n", saltSize)
+					}
+					fmt.Printf("%s\n", hex.EncodeToString(salt))
+					return cli.Exit("", 0)
 				},
 			},
 		},
