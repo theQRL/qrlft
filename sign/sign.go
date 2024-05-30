@@ -7,8 +7,6 @@ import (
 	"github.com/theQRL/go-qrllib/dilithium"
 )
 
-const bufferSize = 65536
-
 func SignMessage(message []byte, hexseed string) string {
 	d, err := dilithium.NewDilithiumFromHexSeed(hexseed)
 	if err != nil {
