@@ -49,6 +49,11 @@ func main() {
 						Name:  "quiet",
 						Usage: "just output the signature, no filename",
 					},
+					&cli.BoolFlag{
+						Name:    "string",
+						Aliases: []string{"s"},
+						Usage:   "hash a string instead of a file [eg. qrlft hash --sha256 HashThisText]",
+					},
 				},
 				Action: func(ctx *cli.Context) error {
 					if ctx.String("hexseed") == "" {
@@ -56,6 +61,18 @@ func main() {
 					}
 					hexseed := ctx.String("hexseed")
 					files := ctx.Args().Slice()
+
+					if ctx.Bool("string") {
+						if len(files) == 0 {
+							return cli.Exit("No string provided", 74)
+						}
+						signature, err := sign.SignString(files[0], hexseed)
+						if err != nil {
+							return cli.Exit("Error when signing "+files[0], 75)
+						}
+						return cli.Exit(signature, 0)
+					}
+
 					if len(files) == 0 {
 						return cli.Exit("No file provided", 82)
 					}
@@ -140,6 +157,9 @@ func main() {
 					files := ctx.Args().Slice()
 
 					if ctx.Bool("string") {
+						if len(files) == 0 {
+							return cli.Exit("No string provided", 73)
+						}
 						if ctx.Bool("sha256") {
 							return cli.Exit(hash.SHA256string(files[0]), 0)
 						}

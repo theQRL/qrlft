@@ -9,6 +9,7 @@ import (
 )
 
 func SignMessage(message []byte, hexseed string) string {
+	// fmt.Print(hex.EncodeToString(message[:]) + "\n")
 	d, err := dilithium.NewDilithiumFromHexSeed(hexseed)
 	if err != nil {
 		panic("failed to generate new dilithium from seed " + err.Error())
@@ -45,4 +46,8 @@ func SignFile(filename string, hexseed string) (string, error) {
 		return "", err
 	}
 	return SignMessage(buffer[:bytesread], hexseed), nil
+}
+
+func SignString(stringToSign string, hexseed string) (string, error) {
+	return SignMessage([]byte(stringToSign), hexseed), nil
 }
