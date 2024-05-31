@@ -1,11 +1,12 @@
-// Package checksum computes checksums for large files
-package checksum
+// Package hash: hashes and checksums files and strings
+package hash
 
 import (
 	"bufio"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"hash/crc32"
@@ -161,4 +162,59 @@ func sum(hashAlgorithm hash.Hash, filename string) (string, error) {
 	defer func() { _ = file.Close() }()
 
 	return sumReader(hashAlgorithm, bufio.NewReader(file))
+}
+
+func SHA256string(stringToHash string) string {
+	hash := sha256.New()
+	hash.Write([]byte(stringToHash))
+	hashed := hash.Sum(nil)
+	return hex.EncodeToString(hashed)
+}
+func SHA1string(stringToHash string) string {
+	hash := sha1.New()
+	hash.Write([]byte(stringToHash))
+	hashed := hash.Sum(nil)
+	return hex.EncodeToString(hashed)
+}
+
+func MD5string(stringToHash string) string {
+	hash := md5.New()
+	hash.Write([]byte(stringToHash))
+	hashed := hash.Sum(nil)
+	return hex.EncodeToString(hashed)
+}
+
+func CRC32string(stringToHash string) string {
+	hash := crc32.NewIEEE()
+	hash.Write([]byte(stringToHash))
+	hashed := hash.Sum(nil)
+	return hex.EncodeToString(hashed)
+}
+
+func SHA3512string(stringToHash string) string {
+	hash := sha3.New512()
+	hash.Write([]byte(stringToHash))
+	hashed := hash.Sum(nil)
+	return hex.EncodeToString(hashed)
+}
+
+func Keccak256string(stringToHash string) string {
+	hash := sha3.NewLegacyKeccak256()
+	hash.Write([]byte(stringToHash))
+	hashed := hash.Sum(nil)
+	return hex.EncodeToString(hashed)
+}
+
+func Keccak512string(stringToHash string) string {
+	hash := sha3.NewLegacyKeccak512()
+	hash.Write([]byte(stringToHash))
+	hashed := hash.Sum(nil)
+	return hex.EncodeToString(hashed)
+}
+
+func Blake2s256string(stringToHash string) string {
+	hash, _ := blake2s.New256([]byte{})
+	hash.Write([]byte(stringToHash))
+	hashed := hash.Sum(nil)
+	return hex.EncodeToString(hashed)
 }
