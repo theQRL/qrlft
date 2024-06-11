@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 
-	"github.com/theQRL/qrlft/checksum"
+	"github.com/theQRL/qrlft/hash"
 	"github.com/theQRL/qrlft/sign"
 	"github.com/theQRL/qrlft/verify"
 	"github.com/urfave/cli/v2"
@@ -170,6 +171,11 @@ func main() {
 						Name:  "quiet",
 						Usage: "just output the signature, no filename",
 					},
+					&cli.BoolFlag{
+						Name:    "string",
+						Aliases: []string{"s"},
+						Usage:   "hash a string instead of a file [eg. qrlft hash --sha256 HashThisText]",
+					},
 				},
 				Action: func(ctx *cli.Context) error {
 					if ctx.String("hexseed") == "" {
@@ -177,15 +183,30 @@ func main() {
 					}
 					hexseed := ctx.String("hexseed")
 					files := ctx.Args().Slice()
+
+					if ctx.Bool("string") {
+						if len(files) == 0 {
+							return cli.Exit("No string provided", 74)
+						}
+						signature, err := sign.SignString(files[0], hexseed)
+						if err != nil {
+							return cli.Exit("Error when signing "+files[0], 75)
+						}
+						return cli.Exit(signature, 0)
+					}
+
 					if len(files) == 0 {
 						return cli.Exit("No file provided", 82)
+					}
+					if len(files) == 1 {
+						files, _ = filepath.Glob(files[0])
 					}
 					for _, file := range files {
 						file := file
 
 						filecheck, err := os.Open(file)
 						if err != nil {
-							return cli.Exit("Error when signing "+file, 78)
+							return cli.Exit("Error when signing "+file+" - "+err.Error(), 78)
 						}
 						defer filecheck.Close()
 
@@ -247,19 +268,71 @@ func main() {
 						Name:  "quiet",
 						Usage: "just output the hash, no filename",
 					},
+					&cli.BoolFlag{
+						Name:    "string",
+						Aliases: []string{"s"},
+						Usage:   "hash a string instead of a file [eg. qrlft hash --sha256 HashThisText]",
+					},
 				},
 				Action: func(ctx *cli.Context) error {
 					action := false
 					files := ctx.Args().Slice()
+
+					if ctx.Bool("string") {
+						if len(files) == 0 {
+							return cli.Exit("No string provided", 73)
+						}
+						if ctx.Bool("sha256") {
+							return cli.Exit(hash.SHA256string(files[0]), 0)
+						}
+						if ctx.Bool("sha1") {
+							return cli.Exit(hash.SHA1string(files[0]), 0)
+						}
+						if ctx.Bool("md5") {
+							return cli.Exit(hash.MD5string(files[0]), 0)
+						}
+						if ctx.Bool("crc32") {
+							return cli.Exit(hash.CRC32string(files[0]), 0)
+						}
+						if ctx.Bool("sha3-512") {
+							return cli.Exit(hash.SHA3512string(files[0]), 0)
+						}
+						if ctx.Bool("keccak-256") {
+							return cli.Exit(hash.Keccak256string(files[0]), 0)
+						}
+						if ctx.Bool("keccak-512") {
+							return cli.Exit(hash.Keccak512string(files[0]), 0)
+						}
+						if ctx.Bool("blake2s") {
+							return cli.Exit(hash.Blake2s256string(files[0]), 0)
+						}
+					}
+
 					if len(files) == 0 {
 						return cli.Exit("No file provided", 82)
 					}
+					if len(files) == 1 && !ctx.Bool("string") {
+						files, _ = filepath.Glob(files[0])
+					}
 					for _, file := range files {
 						file := file
+						filecheck, err := os.Open(file)
+						if err != nil {
+							return cli.Exit("Error when hashing "+file+" - "+err.Error(), 78)
+						}
+						defer filecheck.Close()
 
+						fileinfo, err := filecheck.Stat()
+						if err != nil {
+							return cli.Exit("Error when hashing "+file, 77)
+						}
+						if fileinfo.IsDir() {
+							// skip this iteration
+							continue
+						}
 						// sha3-512
 						if ctx.Bool("sha3-512") {
-							x, err := checksum.SHA3512sum(file)
+							x, err := hash.SHA3512sum(file)
 							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
@@ -270,7 +343,7 @@ func main() {
 
 						// keccak-256
 						if ctx.Bool("keccak-256") {
-							x, err := checksum.Keccak256sum(file)
+							x, err := hash.Keccak256sum(file)
 							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
@@ -281,7 +354,7 @@ func main() {
 
 						// keccak-512
 						if ctx.Bool("keccak-512") {
-							x, err := checksum.Keccak512sum(file)
+							x, err := hash.Keccak512sum(file)
 							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
@@ -292,7 +365,7 @@ func main() {
 
 						// sha256
 						if ctx.Bool("sha256") {
-							x, err := checksum.SHA256sum(file)
+							x, err := hash.SHA256sum(file)
 							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
@@ -303,7 +376,7 @@ func main() {
 
 						// md5
 						if ctx.Bool("md5") {
-							x, err := checksum.MD5sum(file)
+							x, err := hash.MD5sum(file)
 							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
@@ -314,7 +387,7 @@ func main() {
 
 						// crc32
 						if ctx.Bool("crc32") {
-							x, err := checksum.CRC32(file)
+							x, err := hash.CRC32(file)
 							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
@@ -325,7 +398,7 @@ func main() {
 
 						// sha1
 						if ctx.Bool("sha1") {
-							x, err := checksum.SHA1sum(file)
+							x, err := hash.SHA1sum(file)
 							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
@@ -336,7 +409,7 @@ func main() {
 
 						// blake2s
 						if ctx.Bool("blake2s") {
-							x, err := checksum.Blake2s256(file)
+							x, err := hash.Blake2s256(file)
 							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)

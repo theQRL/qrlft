@@ -1,6 +1,6 @@
 module github.com/theQRL/qrlft
 
-go 1.22.0
+go 1.22
 
 // direct crypto module
 require golang.org/x/crypto v0.23.0
