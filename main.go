@@ -11,6 +11,7 @@ import (
 
 	"github.com/theQRL/qrlft/hash"
 	"github.com/theQRL/qrlft/sign"
+	"github.com/theQRL/qrlft/verify"
 	"github.com/urfave/cli/v2"
 )
 
@@ -37,8 +38,128 @@ func main() {
 		Usage: "QRL File Tools - See docs at https://github.com/theQRL/qrlft",
 		Commands: []*cli.Command{
 			{
+				Name:  "verify",
+				Usage: "verify a dilithium signature matches the target file [eg. qrlft verify --signature=3b4e... doc.txt]",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "sigfile",
+						Aliases: []string{"sf"},
+						Usage:   "Signature is a file [eg. qrlft verify --sigfile=signature.sig doc.txt]",
+					},
+					&cli.StringFlag{
+						Name:    "signature",
+						Aliases: []string{"s"},
+						Usage:   "Signature is included on the command line [eg. qrlft verify --signature=3b4e... doc.txt]",
+					},
+					&cli.StringFlag{
+						Name:    "publickey",
+						Aliases: []string{"pk"},
+						Usage:   "Specify the public key of the signer on command line [eg. qrlft verify --publickey=3b4e... doc.txt]",
+					},
+					&cli.StringFlag{
+						Name:    "pkfile",
+						Aliases: []string{"pkf"},
+						Usage:   "Specify the public key of the signer in a file [eg. qrlft verify --pkfile=publickey.pub doc.txt]",
+					},
+				},
+				Action: func(ctx *cli.Context) error {
+
+					if ctx.String("signature") == "" && ctx.String("sigfile") == "" {
+						return cli.Exit("No signature provided", 78)
+					}
+					if ctx.String("publickey") == "" && ctx.String("pkfile") == "" {
+						return cli.Exit("No public key provided", 78)
+					}
+					files := ctx.Args().Slice()
+					if len(files) == 0 {
+						return cli.Exit("No file provided", 82)
+					}
+					for _, file := range files {
+						file := file
+
+						filecheck, err := os.Open(file)
+						if err != nil {
+							return cli.Exit("Error when verifying "+file, 78)
+						}
+						defer filecheck.Close()
+
+						fileinfo, err := filecheck.Stat()
+						if err != nil {
+							return cli.Exit("Error when verifying "+file, 77)
+						}
+						if fileinfo.IsDir() {
+							// skip this iteration
+							continue
+						}
+						signature := ctx.String("signature")
+
+						if ctx.String("sigfile") != "" {
+							sigfile, err := os.Open(ctx.String("sigfile"))
+							if err != nil {
+								return cli.Exit("Could not open signature file "+ctx.String("sigfile"), 71)
+							}
+							defer sigfile.Close()
+
+							sigfileinfo, err := sigfile.Stat()
+							if err != nil {
+								return cli.Exit("Could not open signature file "+ctx.String("sigfile"), 70)
+							}
+							if sigfileinfo.IsDir() {
+								return cli.Exit("Could not open signature file "+ctx.String("sigfile")+" - is it a folder?", 72)
+							}
+							// load contents of sigfile into string
+							sigfilebuffer := make([]byte, sigfileinfo.Size())
+							_, err = sigfile.Read(sigfilebuffer)
+							if err != nil {
+								return cli.Exit("Could not read signature file "+ctx.String("sigfile"), 69)
+							}
+							signature = string(sigfilebuffer)
+							// trim string to be correct signature length
+							signature = signature[:9190]
+						}
+						pk := ctx.String("publickey")
+						if ctx.String("pkfile") != "" {
+							pkfile, err := os.Open(ctx.String("pkfile"))
+							if err != nil {
+								return cli.Exit("Could not open public key file "+ctx.String("pkfile"), 71)
+							}
+							defer pkfile.Close()
+
+							pkfileinfo, err := pkfile.Stat()
+							if err != nil {
+								return cli.Exit("Could not open public key file "+ctx.String("pkfile"), 70)
+							}
+							if pkfileinfo.IsDir() {
+								return cli.Exit("Could not open public key file "+ctx.String("pkfile")+" - is it a folder?", 72)
+							}
+							// load contents of pkfile into string
+							pkfilebuffer := make([]byte, pkfileinfo.Size())
+							_, err = pkfile.Read(pkfilebuffer)
+							if err != nil {
+								return cli.Exit("Could not read public key file "+ctx.String("pkfile"), 69)
+							}
+							pk = string(pkfilebuffer)
+							pk = pk[:5184]
+						}
+
+						verified, err := verify.VerifyFile(file, signature, pk)
+						if err != nil {
+							fmt.Printf("Error: %a", err)
+							return cli.Exit("Error when verifying "+file, 79)
+						}
+						if verified {
+							return cli.Exit("Signature is valid", 0)
+						}
+						if !verified {
+							return cli.Exit("Signature is not valid", 1)
+						}
+					}
+					return cli.Exit("", 0)
+				},
+			},
+			{
 				Name:  "sign",
-				Usage: "signs a file with a dilithium signature [eg. qrlft sign --hexseed=f29f58aff0b00de2844f7e20bd9eeaacc379150043beeb328335817512b29fbb7184da84a092f842b2a06d72a24a5d28 doc.txt",
+				Usage: "signs a file with a dilithium signature [eg. qrlft sign --hexseed=f29f58aff0b00de2844f7e20bd9eeaacc379150043beeb328335817512b29fbb7184da84a092f842b2a06d72a24a5d28 doc.txt]",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "hexseed",
