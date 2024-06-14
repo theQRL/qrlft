@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/theQRL/go-qrllib/dilithium"
 	"github.com/theQRL/qrlft/hash"
 	"github.com/theQRL/qrlft/sign"
 	"github.com/theQRL/qrlft/verify"
@@ -224,6 +225,57 @@ func main() {
 						}
 						output(file, signature, ctx.Bool("quiet"))
 					}
+					return cli.Exit("", 0)
+				},
+			},
+			{
+				Name:  "publickey",
+				Usage: "outputs the public key for a private hexseed to a file or to console [eg. qrlft publickey --hexseed=f29f58aff0b00de2844f7e20bd9eeaacc379150043beeb328335817512b29fbb7184da84a092f842b2a06d72a24a5d28 mykey.pub]",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "hexseed",
+						Aliases: []string{"hs"},
+						Usage:   "[Required] private key `SEED`",
+					},
+					&cli.BoolFlag{
+						Name:  "quiet",
+						Usage: "just output the signature, no filename",
+					},
+					&cli.BoolFlag{
+						Name:    "print",
+						Aliases: []string{"p"},
+						Usage:   "prints the public key to the console instead of writing to a file [eg. qrlft publickey --print --hexseed=f29f58aff0b00de2844f7e20bd9eeaacc379150043beeb328335817512b29fbb7184da84a092f842b2a06d72a24a5d28]",
+					},
+				},
+				Action: func(ctx *cli.Context) error {
+					if ctx.String("hexseed") == "" {
+						return cli.Exit("No hexseed provided", 78)
+					}
+					hexseed := ctx.String("hexseed")
+					files := ctx.Args().Slice()
+					writeToConsole := false
+
+					if ctx.Bool("print") {
+						writeToConsole = true
+					}
+					if len(files) == 0 && !writeToConsole {
+						return cli.Exit("Please specify an output file or use the --print flag to dump the public key to the console", 62)
+					}
+					d, err := dilithium.NewDilithiumFromHexSeed(hexseed)
+					pkBin := d.GetPK()
+					pk := hex.EncodeToString(pkBin[:])
+					if err != nil {
+						cli.Exit("failed to generate dilithium public key from the hexseed provided", 61)
+					}
+					if !writeToConsole {
+						if err := os.WriteFile(files[0], []byte(pk), 0644); err != nil {
+							return cli.Exit("failed to write public key to file", 62)
+						}
+						return cli.Exit("", 0)
+					} else {
+						fmt.Printf("%s\n", pk)
+					}
+					// }
 					return cli.Exit("", 0)
 				},
 			},
