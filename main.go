@@ -265,7 +265,7 @@ func main() {
 					pkBin := d.GetPK()
 					pk := hex.EncodeToString(pkBin[:])
 					if err != nil {
-						cli.Exit("failed to generate dilithium public key from the hexseed provided", 61)
+						return cli.Exit("failed to generate dilithium public key from the hexseed provided", 61)
 					}
 					if !writeToConsole {
 						if err := os.WriteFile(files[0], []byte(pk), 0644); err != nil {
