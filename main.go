@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	b64 "encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -31,6 +32,35 @@ func output(filename string, hash string, quiet bool) {
 		return
 	}
 	fmt.Printf("%s\n", hash)
+}
+
+func hexStringToRFC7468(hexString string) string {
+	// first convert hexstring to binary
+	decoded, err := hex.DecodeString(hexString)
+	if err != nil {
+		panic(err)
+	}
+	// then convert binary to base64
+	sEnc := b64.StdEncoding.EncodeToString([]byte(decoded))
+	// pass sEnc to split function and return
+	sArray := split(sEnc, 64)
+	sEnc = ""
+	for _, chunk := range sArray {
+		sEnc = sEnc + "\n" + chunk
+	}
+	return sEnc
+}
+
+func split(s string, size int) []string {
+	ss := make([]string, 0, len(s)/size+1)
+	for len(s) > 0 {
+		if len(s) < size {
+			size = len(s)
+		}
+		ss, s = append(ss, s[:size]), s[size:]
+
+	}
+	return ss
 }
 
 func main() {
@@ -140,7 +170,20 @@ func main() {
 								return cli.Exit("Could not read public key file "+ctx.String("pkfile"), 69)
 							}
 							pk = string(pkfilebuffer)
-							pk = pk[:5184]
+							// check if plain hexstring or base64 encoded
+							if pk[:36] != "-----BEGIN DILITHIUM PUBLIC KEY-----" {
+								pk = pk[:5184]
+							} else {
+								pk = pk[36 : len(pk)-35]
+								// fmt.Println(pk)
+								// convert base64 to bytes
+								pkBytes, err := b64.StdEncoding.DecodeString(pk)
+								if err != nil {
+									fmt.Println(err)
+									return cli.Exit("Could not decode base64 public key", 69)
+								}
+								pk = hex.EncodeToString(pkBytes)
+							}
 						}
 
 						verified, err := verify.VerifyFile(file, signature, pk)
@@ -268,7 +311,7 @@ func main() {
 						return cli.Exit("failed to generate dilithium public key from the hexseed provided", 61)
 					}
 					if !writeToConsole {
-						if err := os.WriteFile(files[0], []byte(pk), 0644); err != nil {
+						if err := os.WriteFile(files[0], []byte("-----BEGIN DILITHIUM PUBLIC KEY-----"+hexStringToRFC7468(pk)+"\n-----END DILITHIUM PUBLIC KEY-----"), 0644); err != nil {
 							return cli.Exit("failed to write public key to file", 62)
 						}
 						return cli.Exit("", 0)
