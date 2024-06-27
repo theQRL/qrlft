@@ -46,18 +46,18 @@ jobs:
             dist/*.zip
           hexseed: ${{ secrets.DILITHIUM_HEXSEED }}
           output: sig.txt
+      - uses: actions-ecosystem/action-get-latest-tag@v1
+        id: get-latest-tag
+        with:
+          semver_only: true
       - name: Trim dist/ from signatures file
         run: |
-          sed 's/dist\///g' sig.txt >signatures.txt
+          sed 's/dist\///g' sig.txt >qrlft_${{ steps.get-latest-tag.outputs.tag }}_signatures.txt
       - name: Upload signature file as artifact
         uses: actions/upload-artifact@master
         with:
           name: result
           path: signatures.txt
-      - uses: actions-ecosystem/action-get-latest-tag@v1
-        id: get-latest-tag
-        with:
-          semver_only: true
       - name: Add to release
         uses: AButler/upload-release-assets@v2.0
         with:
