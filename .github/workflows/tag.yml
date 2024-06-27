@@ -1,0 +1,27 @@
+name: Tag
+on:
+  push:
+    tags:
+    - '*'
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: release-artifacts
+          path: release    
+      - name: Signs with Dilithium
+        uses: theQRL/actions-dilithium-sign@v1
+        with:
+          patterns: |
+            release/
+          hexseed: ${{ secrets.DILITHIUM_HEXSEED }}
+      - name: Upload signature file as artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: result
+          path: signatures.txt
