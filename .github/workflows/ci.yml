@@ -39,11 +39,16 @@ jobs:
           hooks: goreleaser
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download release artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: release-artifacts
+          path: release    
       - name: Signs with Dilithium
         uses: theQRL/actions-dilithium-sign@v1
         with:
           patterns: |
-            *.*
+            release/
           hexseed: ${{ secrets.DILITHIUM_HEXSEED }}
       - name: Upload signature file as artifact
         uses: actions/upload-artifact@master
