@@ -54,8 +54,13 @@ jobs:
         with:
           name: result
           path: signatures.txt
+      - uses: actions-ecosystem/action-get-latest-tag@v1
+        id: get-latest-tag
+        with:
+          semver_only: true
       - name: Add to release
         uses: AButler/upload-release-assets@v2.0
         with:
           files: signatures.txt
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          release-tag: ${{ steps.get-latest-tag.outputs.tag }}
