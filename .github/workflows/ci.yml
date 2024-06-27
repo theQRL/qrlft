@@ -53,14 +53,9 @@ jobs:
       - name: Trim dist/ from signatures file
         run: |
           sed 's/dist\///g' sig.txt >qrlft_${{ steps.get-latest-tag.outputs.tag }}_signatures.txt
-      - name: Upload signature file as artifact
-        uses: actions/upload-artifact@master
-        with:
-          name: result
-          path: signatures.txt
       - name: Add to release
         uses: AButler/upload-release-assets@v2.0
         with:
-          files: signatures.txt
+          files: qrlft_${{ steps.get-latest-tag.outputs.tag }}_signatures.txt
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           release-tag: ${{ steps.get-latest-tag.outputs.tag }}
