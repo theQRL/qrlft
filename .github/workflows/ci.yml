@@ -43,7 +43,7 @@ jobs:
         uses: theQRL/actions-dilithium-sign@v1
         with:
           patterns: |
-            dist/
+            dist/*
           hexseed: ${{ secrets.DILITHIUM_HEXSEED }}
       - name: Upload signature file as artifact
         uses: actions/upload-artifact@master
