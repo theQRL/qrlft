@@ -43,7 +43,7 @@ jobs:
         uses: theQRL/actions-dilithium-sign@v1
         with:
           patterns: |
-            *.zip
+            dist/*.zip
           hexseed: ${{ secrets.DILITHIUM_HEXSEED }}
           output: sig.txt
       - name: Trim dist/ from signatures file
@@ -54,3 +54,9 @@ jobs:
         with:
           name: result
           path: signatures.txt
+      - name: Add to release
+        uses: AButler/upload-release-assets@v2.0
+        with:
+          files: signatures.txt
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          release-tag: ${{  github.ref_name }}
