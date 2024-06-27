@@ -45,9 +45,10 @@ jobs:
           patterns: |
             *.zip
           hexseed: ${{ secrets.DILITHIUM_HEXSEED }}
+          output: sig.txt
       - name: Trim dist/ from signatures file
         run: |
-          sed -i 's/dist\///g' signatures.txt > signatures.txt
+          sed -i 's/dist\///g' sig.txt >signatures.txt
       - name: Upload signature file as artifact
         uses: actions/upload-artifact@master
         with:
