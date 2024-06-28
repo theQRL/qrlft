@@ -225,6 +225,10 @@ func main() {
 						return cli.Exit("No hexseed provided", 78)
 					}
 					hexseed := ctx.String("hexseed")
+					// if first two chars are "0x" remove them
+					if hexseed[:2] == "0x" {
+						hexseed = hexseed[2:]
+					}
 					files := ctx.Args().Slice()
 
 					if ctx.Bool("string") {
@@ -295,6 +299,10 @@ func main() {
 						return cli.Exit("No hexseed provided", 78)
 					}
 					hexseed := ctx.String("hexseed")
+					// if first two chars are "0x" remove them
+					if hexseed[:2] == "0x" {
+						hexseed = hexseed[2:]
+					}
 					files := ctx.Args().Slice()
 					writeToConsole := false
 
