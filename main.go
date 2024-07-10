@@ -543,6 +543,55 @@ func main() {
 					return cli.Exit("", 0)
 				},
 			},
+			{
+				Name:  "new-dilithium",
+				Usage: "generates new dilithium keypair",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "print",
+						Aliases: []string{"p"},
+						Usage:   "prints the public/private keys and hexseed to the console instead of writing to a file [eg. qrlft new-dilithium --print]",
+					},
+				},
+				Action: func(ctx *cli.Context) error {
+					d, _ := dilithium.New()
+					sk := d.GetSK()
+					skBytes := sk[:]
+					pk := d.GetPK()
+					pkBytes := pk[:]
+					hs := d.GetHexSeed()
+					files := ctx.Args().Slice()
+					writeToConsole := false
+
+					if ctx.Bool("print") {
+						writeToConsole = true
+					}
+
+					if len(files) == 0 && !writeToConsole {
+						return cli.Exit("Please specify an output file or use the --print flag to dump the keys to the console", 62)
+					}
+
+					if writeToConsole {
+						fmt.Printf("Private Key:\n%s\n\n", hex.EncodeToString(skBytes))
+						fmt.Printf("Public Key: \n%s\n\n", hex.EncodeToString(pkBytes))
+						fmt.Printf("Hexseed: \n%s\n", hs)
+						// fmt.Printf("Public Key: %s\n", hexStringToRFC7468(hex.EncodeToString(pkBytes)))
+						// fmt.Printf("Private Key: %s\n", hexStringToRFC7468(hex.EncodeToString(skBytes)))
+					} else {
+						fmt.Printf("Write to file: %s\n", files[0])
+						if err := os.WriteFile(files[0], []byte("-----BEGIN DILITHIUM PRIVATE KEY-----"+hexStringToRFC7468(hex.EncodeToString(skBytes))+"\n-----END DILITHIUM PRIVATE KEY-----\n"), 0644); err != nil {
+							return cli.Exit("failed to write private key to file", 62)
+						}
+						if err := os.WriteFile(files[0]+".pub", []byte("-----BEGIN DILITHIUM PUBLIC KEY-----"+hexStringToRFC7468(hex.EncodeToString(pkBytes))+"\n-----END DILITHIUM PUBLIC KEY-----\n"), 0644); err != nil {
+							return cli.Exit("failed to write public key to file", 62)
+						}
+						if err := os.WriteFile(files[0]+".private.hexseed", []byte("-----BEGIN DILITHIUM PRIVATE HEXSEED-----\n"+hs+"\n-----END DILITHIUM PRIVATE HEXSEED-----\n"), 0644); err != nil {
+							return cli.Exit("failed to write private hexseed to file", 62)
+						}
+					}
+					return cli.Exit("", 0)
+				},
+			},
 		},
 	}
 
