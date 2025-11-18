@@ -5,7 +5,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/theQRL/go-qrllib/dilithium"
+	"github.com/theQRL/go-qrllib/crypto/dilithium"
 )
 
 func VerifyFile(filename string, signature string, pk string) (bool, error) {
@@ -43,6 +43,18 @@ func VerifyFile(filename string, signature string, pk string) (bool, error) {
 
 	return dilithium.Verify(buffer[:bytesread], sigBytes, &pkBytes), nil
 	// return true, nil
+}
+
+func VerifyMessage(message []byte, signature string, pk string) (bool, error) {
+	// declare 4595 length uint8 array
+	var sigBytes [dilithium.CryptoBytes]uint8
+	fSig, _ := hex.DecodeString(signature)
+	copy(sigBytes[:], fSig)
+
+	// convert public key to 1472 length uint8 array
+	pkBytes := PKHStrToBin(pk)
+
+	return dilithium.Verify(message, sigBytes, &pkBytes), nil
 }
 
 func PKHStrToBin(pkHStr string) [dilithium.CryptoPublicKeyBytes]uint8 {

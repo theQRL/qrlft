@@ -9,8 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
-	"github.com/theQRL/go-qrllib/dilithium"
+	"github.com/theQRL/go-qrllib/crypto/dilithium"
 	"github.com/theQRL/qrlft/hash"
 	"github.com/theQRL/qrlft/sign"
 	"github.com/theQRL/qrlft/verify"
@@ -61,6 +62,76 @@ func split(s string, size int) []string {
 
 	}
 	return ss
+}
+
+// readKeyFromFile reads a key file and detects if it's a hexseed or private key
+// Returns the hexseed string and an error
+func readKeyFromFile(filepath string) (string, error) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return "", fmt.Errorf("could not open key file %s: %w", filepath, err)
+	}
+	defer file.Close()
+
+	fileinfo, err := file.Stat()
+	if err != nil {
+		return "", fmt.Errorf("could not stat key file %s: %w", filepath, err)
+	}
+	if fileinfo.IsDir() {
+		return "", fmt.Errorf("key file %s is a directory", filepath)
+	}
+
+	// Read file content
+	filebuffer := make([]byte, fileinfo.Size())
+	_, err = file.Read(filebuffer)
+	if err != nil {
+		return "", fmt.Errorf("could not read key file %s: %w", filepath, err)
+	}
+
+	content := strings.TrimSpace(string(filebuffer))
+
+	// Check if it's a hexseed file (RFC7468 format)
+	if strings.HasPrefix(content, "-----BEGIN DILITHIUM PRIVATE HEXSEED-----") {
+		// Extract hexseed from RFC7468 format
+		content = strings.TrimPrefix(content, "-----BEGIN DILITHIUM PRIVATE HEXSEED-----")
+		content = strings.TrimSuffix(content, "-----END DILITHIUM PRIVATE HEXSEED-----")
+		content = strings.TrimSpace(content)
+		// Remove 0x prefix if present
+		content = strings.TrimPrefix(content, "0x")
+		return content, nil
+	}
+
+	// Check if it's a private key file (RFC7468 format)
+	if strings.HasPrefix(content, "-----BEGIN DILITHIUM PRIVATE KEY-----") {
+		// Extract base64 content from RFC7468 format
+		content = strings.TrimPrefix(content, "-----BEGIN DILITHIUM PRIVATE KEY-----")
+		content = strings.TrimSuffix(content, "-----END DILITHIUM PRIVATE KEY-----")
+		content = strings.TrimSpace(content)
+		// Remove newlines from base64 content
+		content = strings.ReplaceAll(content, "\n", "")
+
+		// Decode base64 to get the private key bytes
+		skBytes, err := b64.StdEncoding.DecodeString(content)
+		if err != nil {
+			return "", fmt.Errorf("could not decode base64 private key: %w", err)
+		}
+
+		// Convert private key bytes to hex string
+		// We'll prefix it with "PRIVATEKEY:" to indicate it's a private key, not a hexseed
+		privateKeyHex := hex.EncodeToString(skBytes)
+		return "PRIVATEKEY:" + privateKeyHex, nil
+	}
+
+	// Assume it's a plain hexseed string
+	content = strings.TrimSpace(content)
+	// Remove 0x prefix if present
+	content = strings.TrimPrefix(content, "0x")
+	// Verify it's valid hex
+	_, err = hex.DecodeString(content)
+	if err != nil {
+		return "", fmt.Errorf("file does not contain a valid hexseed or private key format")
+	}
+	return content, nil
 }
 
 func main() {
@@ -210,6 +281,11 @@ func main() {
 						Aliases: []string{"hs"},
 						Usage:   "Signs file using the private key `SEED`",
 					},
+					&cli.StringFlag{
+						Name:    "keyfile",
+						Aliases: []string{"kf"},
+						Usage:   "Signs file using a private key or hexseed from a file. The function will automatically detect if it's a hexseed or private key.",
+					},
 					&cli.BoolFlag{
 						Name:  "quiet",
 						Usage: "just output the signature, no filename",
@@ -221,23 +297,49 @@ func main() {
 					},
 				},
 				Action: func(ctx *cli.Context) error {
-					if ctx.String("hexseed") == "" {
-						return cli.Exit("No hexseed provided", 78)
+					var hexseed string
+					var err error
+
+					if ctx.String("hexseed") != "" && ctx.String("keyfile") != "" {
+						return cli.Exit("Cannot use both --hexseed and --keyfile flags. Please use only one.", 78)
 					}
-					hexseed := ctx.String("hexseed")
-					// if first two chars are "0x" remove them
-					if hexseed[:2] == "0x" {
-						hexseed = hexseed[2:]
+
+					if ctx.String("hexseed") != "" {
+						hexseed = ctx.String("hexseed")
+						// if first two chars are "0x" remove them
+						if len(hexseed) >= 2 && hexseed[:2] == "0x" {
+							hexseed = hexseed[2:]
+						}
+					} else if ctx.String("keyfile") != "" {
+						hexseed, err = readKeyFromFile(ctx.String("keyfile"))
+						if err != nil {
+							return cli.Exit("Error reading key file: "+err.Error(), 78)
+						}
+					} else {
+						return cli.Exit("No hexseed or keyfile provided. Please use --hexseed or --keyfile", 78)
 					}
 					files := ctx.Args().Slice()
+
+					// Check if we have a private key (prefixed with "PRIVATEKEY:") or a hexseed
+					isPrivateKey := strings.HasPrefix(hexseed, "PRIVATEKEY:")
+					var privateKeyHex string
+					if isPrivateKey {
+						privateKeyHex = strings.TrimPrefix(hexseed, "PRIVATEKEY:")
+					}
 
 					if ctx.Bool("string") {
 						if len(files) == 0 {
 							return cli.Exit("No string provided", 74)
 						}
-						signature, err := sign.SignString(files[0], hexseed)
+						var signature string
+						var err error
+						if isPrivateKey {
+							signature, err = sign.SignStringWithPrivateKey(files[0], privateKeyHex)
+						} else {
+							signature, err = sign.SignString(files[0], hexseed)
+						}
 						if err != nil {
-							return cli.Exit("Error when signing "+files[0], 75)
+							return cli.Exit("Error when signing "+files[0]+": "+err.Error(), 75)
 						}
 						return cli.Exit(signature, 0)
 					}
@@ -265,10 +367,15 @@ func main() {
 							// skip this iteration
 							continue
 						}
-						signature, err := sign.SignFile(file, hexseed)
+						var signature string
+						if isPrivateKey {
+							signature, err = sign.SignFileWithPrivateKey(file, privateKeyHex)
+						} else {
+							signature, err = sign.SignFile(file, hexseed)
+						}
 						if err != nil {
 							fmt.Printf("Error: %a", err)
-							return cli.Exit("Error when signing "+file, 79)
+							return cli.Exit("Error when signing "+file+": "+err.Error(), 79)
 						}
 						output(file, signature, ctx.Bool("quiet"))
 					}
