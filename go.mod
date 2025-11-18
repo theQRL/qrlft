@@ -6,7 +6,7 @@ go 1.22
 require golang.org/x/crypto v0.24.0
 
 require (
-	github.com/theQRL/go-qrllib v0.0.0-20240701181907-0e6b70d94f91
+	github.com/theQRL/go-qrllib v0.1.0
 	github.com/urfave/cli/v2 v2.27.2
 )
 

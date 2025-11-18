@@ -4,6 +4,8 @@ github.com/russross/blackfriday/v2 v2.1.0 h1:JIOH55/0cWyOuilr9/qlrm0BSXldqnqwMsf
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/theQRL/go-qrllib v0.0.0-20240701181907-0e6b70d94f91 h1:tyeOPVxoYWjX2bz0Cm8+x8h5gbUb/uJ2eIiCGWe8Dbs=
 github.com/theQRL/go-qrllib v0.0.0-20240701181907-0e6b70d94f91/go.mod h1:yu3dN/K58ujDUuHZkCOe3Tt6CbubGN3glafVs8k7Bas=
+github.com/theQRL/go-qrllib v0.1.0 h1:Vw716r2huOrJYQEEdBAl7P9CAjmpbEkcGUTKQSqa6c4=
+github.com/theQRL/go-qrllib v0.1.0/go.mod h1:K2QakL8Z3Nrm7fx+SeKYjVrInu0s9WitHHMyUihBkwQ=
 github.com/urfave/cli/v2 v2.27.2 h1:6e0H+AkS+zDckwPCUrZkKX38mRaau4nL2uipkJpbkcI=
 github.com/urfave/cli/v2 v2.27.2/go.mod h1:g0+79LmHHATl7DAcHO99smiR/T7uGLw84w8Y42x+4eM=
 github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 h1:gEOO8jv9F4OT7lGCjxCBTO/36wtF6j2nSip77qHd4x4=
