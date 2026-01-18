@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/theQRL/go-qrllib/crypto/dilithium"
+	qcrypto "github.com/theQRL/qrlft/crypto"
 	"github.com/theQRL/qrlft/hash"
 	"github.com/theQRL/qrlft/sign"
 	"github.com/theQRL/qrlft/verify"
@@ -36,14 +36,11 @@ func output(filename string, hash string, quiet bool) {
 }
 
 func hexStringToRFC7468(hexString string) string {
-	// first convert hexstring to binary
 	decoded, err := hex.DecodeString(hexString)
 	if err != nil {
 		panic(err)
 	}
-	// then convert binary to base64
 	sEnc := b64.StdEncoding.EncodeToString([]byte(decoded))
-	// pass sEnc to split function and return
 	sArray := split(sEnc, 64)
 	sEnc = ""
 	for _, chunk := range sArray {
@@ -65,73 +62,162 @@ func split(s string, size int) []string {
 }
 
 // readKeyFromFile reads a key file and detects if it's a hexseed or private key
-// Returns the hexseed string and an error
-func readKeyFromFile(filepath string) (string, error) {
+// Returns the hexseed string, detected algorithm, and an error
+func readKeyFromFile(filepath string) (string, string, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
-		return "", fmt.Errorf("could not open key file %s: %w", filepath, err)
+		return "", "", fmt.Errorf("could not open key file %s: %w", filepath, err)
 	}
 	defer file.Close()
 
 	fileinfo, err := file.Stat()
 	if err != nil {
-		return "", fmt.Errorf("could not stat key file %s: %w", filepath, err)
+		return "", "", fmt.Errorf("could not stat key file %s: %w", filepath, err)
 	}
 	if fileinfo.IsDir() {
-		return "", fmt.Errorf("key file %s is a directory", filepath)
+		return "", "", fmt.Errorf("key file %s is a directory", filepath)
 	}
 
-	// Read file content
 	filebuffer := make([]byte, fileinfo.Size())
 	_, err = file.Read(filebuffer)
 	if err != nil {
-		return "", fmt.Errorf("could not read key file %s: %w", filepath, err)
+		return "", "", fmt.Errorf("could not read key file %s: %w", filepath, err)
 	}
 
 	content := strings.TrimSpace(string(filebuffer))
 
-	// Check if it's a hexseed file (RFC7468 format)
+	// Detect algorithm from PEM headers
+	detectedAlgo := qcrypto.DetectAlgorithmFromPEM(content)
+
+	// Check if it's a hexseed file (RFC7468 format) - Dilithium
 	if strings.HasPrefix(content, "-----BEGIN DILITHIUM PRIVATE HEXSEED-----") {
-		// Extract hexseed from RFC7468 format
 		content = strings.TrimPrefix(content, "-----BEGIN DILITHIUM PRIVATE HEXSEED-----")
 		content = strings.TrimSuffix(content, "-----END DILITHIUM PRIVATE HEXSEED-----")
 		content = strings.TrimSpace(content)
-		// Remove 0x prefix if present
 		content = strings.TrimPrefix(content, "0x")
-		return content, nil
+		return content, qcrypto.AlgorithmDilithium, nil
 	}
 
-	// Check if it's a private key file (RFC7468 format)
+	// Check if it's a hexseed file (RFC7468 format) - ML-DSA-87
+	if strings.HasPrefix(content, "-----BEGIN ML-DSA-87 PRIVATE HEXSEED-----") {
+		content = strings.TrimPrefix(content, "-----BEGIN ML-DSA-87 PRIVATE HEXSEED-----")
+		content = strings.TrimSuffix(content, "-----END ML-DSA-87 PRIVATE HEXSEED-----")
+		content = strings.TrimSpace(content)
+		content = strings.TrimPrefix(content, "0x")
+		return content, qcrypto.AlgorithmMLDSA, nil
+	}
+
+	// Check if it's a private key file (RFC7468 format) - Dilithium
 	if strings.HasPrefix(content, "-----BEGIN DILITHIUM PRIVATE KEY-----") {
-		// Extract base64 content from RFC7468 format
 		content = strings.TrimPrefix(content, "-----BEGIN DILITHIUM PRIVATE KEY-----")
 		content = strings.TrimSuffix(content, "-----END DILITHIUM PRIVATE KEY-----")
 		content = strings.TrimSpace(content)
-		// Remove newlines from base64 content
 		content = strings.ReplaceAll(content, "\n", "")
 
-		// Decode base64 to get the private key bytes
 		skBytes, err := b64.StdEncoding.DecodeString(content)
 		if err != nil {
-			return "", fmt.Errorf("could not decode base64 private key: %w", err)
+			return "", "", fmt.Errorf("could not decode base64 private key: %w", err)
 		}
 
-		// Convert private key bytes to hex string
-		// We'll prefix it with "PRIVATEKEY:" to indicate it's a private key, not a hexseed
 		privateKeyHex := hex.EncodeToString(skBytes)
-		return "PRIVATEKEY:" + privateKeyHex, nil
+		return "PRIVATEKEY:" + privateKeyHex, qcrypto.AlgorithmDilithium, nil
 	}
 
-	// Assume it's a plain hexseed string
+	// Check if it's a private key file (RFC7468 format) - ML-DSA-87
+	if strings.HasPrefix(content, "-----BEGIN ML-DSA-87 PRIVATE KEY-----") {
+		content = strings.TrimPrefix(content, "-----BEGIN ML-DSA-87 PRIVATE KEY-----")
+		content = strings.TrimSuffix(content, "-----END ML-DSA-87 PRIVATE KEY-----")
+		content = strings.TrimSpace(content)
+		content = strings.ReplaceAll(content, "\n", "")
+
+		skBytes, err := b64.StdEncoding.DecodeString(content)
+		if err != nil {
+			return "", "", fmt.Errorf("could not decode base64 private key: %w", err)
+		}
+
+		privateKeyHex := hex.EncodeToString(skBytes)
+		return "PRIVATEKEY:" + privateKeyHex, qcrypto.AlgorithmMLDSA, nil
+	}
+
+	// Assume it's a plain hexseed string (algorithm unknown)
 	content = strings.TrimSpace(content)
-	// Remove 0x prefix if present
 	content = strings.TrimPrefix(content, "0x")
-	// Verify it's valid hex
 	_, err = hex.DecodeString(content)
 	if err != nil {
-		return "", fmt.Errorf("file does not contain a valid hexseed or private key format")
+		return "", "", fmt.Errorf("file does not contain a valid hexseed or private key format")
 	}
-	return content, nil
+	return content, detectedAlgo, nil
+}
+
+// readPublicKeyFromFile reads a public key file and returns the hex public key and detected algorithm
+func readPublicKeyFromFile(filepath string) (string, string, error) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return "", "", fmt.Errorf("could not open public key file %s: %w", filepath, err)
+	}
+	defer file.Close()
+
+	fileinfo, err := file.Stat()
+	if err != nil {
+		return "", "", fmt.Errorf("could not stat public key file %s: %w", filepath, err)
+	}
+	if fileinfo.IsDir() {
+		return "", "", fmt.Errorf("public key file %s is a directory", filepath)
+	}
+
+	pkfilebuffer := make([]byte, fileinfo.Size())
+	_, err = file.Read(pkfilebuffer)
+	if err != nil {
+		return "", "", fmt.Errorf("could not read public key file %s: %w", filepath, err)
+	}
+
+	pk := strings.TrimSpace(string(pkfilebuffer))
+
+	// Check for Dilithium PEM format
+	if strings.HasPrefix(pk, "-----BEGIN DILITHIUM PUBLIC KEY-----") {
+		pk = strings.TrimPrefix(pk, "-----BEGIN DILITHIUM PUBLIC KEY-----")
+		pk = strings.TrimSuffix(pk, "-----END DILITHIUM PUBLIC KEY-----")
+		pk = strings.TrimSpace(pk)
+		pk = strings.ReplaceAll(pk, "\n", "")
+		pkBytes, err := b64.StdEncoding.DecodeString(pk)
+		if err != nil {
+			return "", "", fmt.Errorf("could not decode base64 public key: %w", err)
+		}
+		return hex.EncodeToString(pkBytes), qcrypto.AlgorithmDilithium, nil
+	}
+
+	// Check for ML-DSA-87 PEM format
+	if strings.HasPrefix(pk, "-----BEGIN ML-DSA-87 PUBLIC KEY-----") {
+		pk = strings.TrimPrefix(pk, "-----BEGIN ML-DSA-87 PUBLIC KEY-----")
+		pk = strings.TrimSuffix(pk, "-----END ML-DSA-87 PUBLIC KEY-----")
+		pk = strings.TrimSpace(pk)
+		pk = strings.ReplaceAll(pk, "\n", "")
+		pkBytes, err := b64.StdEncoding.DecodeString(pk)
+		if err != nil {
+			return "", "", fmt.Errorf("could not decode base64 public key: %w", err)
+		}
+		return hex.EncodeToString(pkBytes), qcrypto.AlgorithmMLDSA, nil
+	}
+
+	// Assume plain hex string - truncate to expected size (Dilithium public key is 2592 bytes = 5184 hex chars)
+	if len(pk) >= 5184 {
+		return pk[:5184], "", nil
+	}
+	return pk, "", nil
+}
+
+// Algorithm and context flags used across commands
+var algorithmFlag = &cli.StringFlag{
+	Name:    "algorithm",
+	Aliases: []string{"a"},
+	Usage:   "Signing algorithm: 'dilithium' (default) or 'mldsa'",
+	Value:   "dilithium",
+}
+
+var contextFlag = &cli.StringFlag{
+	Name:    "context",
+	Aliases: []string{"ctx"},
+	Usage:   "Context string for ML-DSA-87 (required when using mldsa algorithm)",
 }
 
 func main() {
@@ -141,7 +227,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "verify",
-				Usage: "verify a dilithium signature matches the target file [eg. qrlft verify --signature=3b4e... doc.txt]",
+				Usage: "verify a signature matches the target file [eg. qrlft verify --signature=3b4e... doc.txt]",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "sigfile",
@@ -163,9 +249,10 @@ func main() {
 						Aliases: []string{"pkf"},
 						Usage:   "Specify the public key of the signer in a file [eg. qrlft verify --pkfile=publickey.pub doc.txt]",
 					},
+					algorithmFlag,
+					contextFlag,
 				},
 				Action: func(ctx *cli.Context) error {
-
 					if ctx.String("signature") == "" && ctx.String("sigfile") == "" {
 						return cli.Exit("No signature provided", 78)
 					}
@@ -176,6 +263,19 @@ func main() {
 					if len(files) == 0 {
 						return cli.Exit("No file provided", 82)
 					}
+
+					algorithm := ctx.String("algorithm")
+					contextStr := ctx.String("context")
+					var context []byte
+					if algorithm == qcrypto.AlgorithmMLDSA {
+						if contextStr == "" {
+							return cli.Exit("Context is required for ML-DSA-87. Use --context flag.", 78)
+						}
+						context = []byte(contextStr)
+					} else if contextStr != "" {
+						context = []byte(contextStr) // Allow context for dilithium too (ignored)
+					}
+
 					for _, file := range files {
 						file := file
 
@@ -190,7 +290,6 @@ func main() {
 							return cli.Exit("Error when verifying "+file, 77)
 						}
 						if fileinfo.IsDir() {
-							// skip this iteration
 							continue
 						}
 						signature := ctx.String("signature")
@@ -209,57 +308,41 @@ func main() {
 							if sigfileinfo.IsDir() {
 								return cli.Exit("Could not open signature file "+ctx.String("sigfile")+" - is it a folder?", 72)
 							}
-							// load contents of sigfile into string
 							sigfilebuffer := make([]byte, sigfileinfo.Size())
 							_, err = sigfile.Read(sigfilebuffer)
 							if err != nil {
 								return cli.Exit("Could not read signature file "+ctx.String("sigfile"), 69)
 							}
-							signature = string(sigfilebuffer)
-							// trim string to be correct signature length
-							signature = signature[:9190]
+							signature = strings.TrimSpace(string(sigfilebuffer))
 						}
+
 						pk := ctx.String("publickey")
+						detectedAlgo := ""
 						if ctx.String("pkfile") != "" {
-							pkfile, err := os.Open(ctx.String("pkfile"))
+							var err error
+							pk, detectedAlgo, err = readPublicKeyFromFile(ctx.String("pkfile"))
 							if err != nil {
-								return cli.Exit("Could not open public key file "+ctx.String("pkfile"), 71)
+								return cli.Exit(err.Error(), 71)
 							}
-							defer pkfile.Close()
-
-							pkfileinfo, err := pkfile.Stat()
-							if err != nil {
-								return cli.Exit("Could not open public key file "+ctx.String("pkfile"), 70)
-							}
-							if pkfileinfo.IsDir() {
-								return cli.Exit("Could not open public key file "+ctx.String("pkfile")+" - is it a folder?", 72)
-							}
-							// load contents of pkfile into string
-							pkfilebuffer := make([]byte, pkfileinfo.Size())
-							_, err = pkfile.Read(pkfilebuffer)
-							if err != nil {
-								return cli.Exit("Could not read public key file "+ctx.String("pkfile"), 69)
-							}
-							pk = string(pkfilebuffer)
-							// check if plain hexstring or base64 encoded
-							if pk[:36] != "-----BEGIN DILITHIUM PUBLIC KEY-----" {
-								pk = pk[:5184]
-							} else {
-								pk = pk[36 : len(pk)-35]
-								// fmt.Println(pk)
-								// convert base64 to bytes
-								pkBytes, err := b64.StdEncoding.DecodeString(pk)
-								if err != nil {
-									fmt.Println(err)
-									return cli.Exit("Could not decode base64 public key", 69)
+							// Auto-detect algorithm from public key file if not specified
+							if algorithm == "dilithium" && detectedAlgo == qcrypto.AlgorithmMLDSA {
+								algorithm = qcrypto.AlgorithmMLDSA
+								if contextStr == "" {
+									return cli.Exit("Context is required for ML-DSA-87. Use --context flag.", 78)
 								}
-								pk = hex.EncodeToString(pkBytes)
+								context = []byte(contextStr)
 							}
 						}
 
-						verified, err := verify.VerifyFile(file, signature, pk)
+						var verified bool
+						if algorithm == qcrypto.AlgorithmMLDSA {
+							verified, err = verify.VerifyFileWithAlgorithm(file, signature, pk, algorithm, context)
+						} else {
+							verified, err = verify.VerifyFile(file, signature, pk)
+						}
+
 						if err != nil {
-							fmt.Printf("Error: %a", err)
+							fmt.Printf("Error: %v\n", err)
 							return cli.Exit("Error when verifying "+file, 79)
 						}
 						if verified {
@@ -274,7 +357,7 @@ func main() {
 			},
 			{
 				Name:  "sign",
-				Usage: "signs a file with a dilithium signature [eg. qrlft sign --hexseed=f29f58aff0b00de2844f7e20bd9eeaacc379150043beeb328335817512b29fbb7184da84a092f842b2a06d72a24a5d28 doc.txt]",
+				Usage: "signs a file with a signature [eg. qrlft sign --hexseed=f29f58... doc.txt]",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "hexseed",
@@ -293,31 +376,51 @@ func main() {
 					&cli.BoolFlag{
 						Name:    "string",
 						Aliases: []string{"s"},
-						Usage:   "hash a string instead of a file [eg. qrlft hash --sha256 HashThisText]",
+						Usage:   "sign a string instead of a file [eg. qrlft sign --hexseed=... -s 'Hello World']",
 					},
+					algorithmFlag,
+					contextFlag,
 				},
 				Action: func(ctx *cli.Context) error {
 					var hexseed string
 					var err error
+					var detectedAlgo string
 
 					if ctx.String("hexseed") != "" && ctx.String("keyfile") != "" {
 						return cli.Exit("Cannot use both --hexseed and --keyfile flags. Please use only one.", 78)
 					}
 
+					algorithm := ctx.String("algorithm")
+
 					if ctx.String("hexseed") != "" {
 						hexseed = ctx.String("hexseed")
-						// if first two chars are "0x" remove them
 						if len(hexseed) >= 2 && hexseed[:2] == "0x" {
 							hexseed = hexseed[2:]
 						}
 					} else if ctx.String("keyfile") != "" {
-						hexseed, err = readKeyFromFile(ctx.String("keyfile"))
+						hexseed, detectedAlgo, err = readKeyFromFile(ctx.String("keyfile"))
 						if err != nil {
 							return cli.Exit("Error reading key file: "+err.Error(), 78)
+						}
+						// Auto-detect algorithm from key file if not explicitly specified
+						if detectedAlgo != "" && algorithm == "dilithium" {
+							algorithm = detectedAlgo
 						}
 					} else {
 						return cli.Exit("No hexseed or keyfile provided. Please use --hexseed or --keyfile", 78)
 					}
+
+					contextStr := ctx.String("context")
+					var context []byte
+					if algorithm == qcrypto.AlgorithmMLDSA {
+						if contextStr == "" {
+							return cli.Exit("Context is required for ML-DSA-87. Use --context flag.", 78)
+						}
+						context = []byte(contextStr)
+					} else if contextStr != "" {
+						context = []byte(contextStr)
+					}
+
 					files := ctx.Args().Slice()
 
 					// Check if we have a private key (prefixed with "PRIVATEKEY:") or a hexseed
@@ -332,9 +435,10 @@ func main() {
 							return cli.Exit("No string provided", 74)
 						}
 						var signature string
-						var err error
 						if isPrivateKey {
 							signature, err = sign.SignStringWithPrivateKey(files[0], privateKeyHex)
+						} else if algorithm == qcrypto.AlgorithmMLDSA {
+							signature, err = sign.SignStringWithAlgorithm(files[0], hexseed, algorithm, context)
 						} else {
 							signature, err = sign.SignString(files[0], hexseed)
 						}
@@ -364,17 +468,18 @@ func main() {
 							return cli.Exit("Error when signing "+file, 77)
 						}
 						if fileinfo.IsDir() {
-							// skip this iteration
 							continue
 						}
 						var signature string
 						if isPrivateKey {
 							signature, err = sign.SignFileWithPrivateKey(file, privateKeyHex)
+						} else if algorithm == qcrypto.AlgorithmMLDSA {
+							signature, err = sign.SignFileWithAlgorithm(file, hexseed, algorithm, context)
 						} else {
 							signature, err = sign.SignFile(file, hexseed)
 						}
 						if err != nil {
-							fmt.Printf("Error: %a", err)
+							fmt.Printf("Error: %v\n", err)
 							return cli.Exit("Error when signing "+file+": "+err.Error(), 79)
 						}
 						output(file, signature, ctx.Bool("quiet"))
@@ -384,7 +489,7 @@ func main() {
 			},
 			{
 				Name:  "publickey",
-				Usage: "outputs the public key for a private hexseed to a file or to console [eg. qrlft publickey --hexseed=f29f58aff0b00de2844f7e20bd9eeaacc379150043beeb328335817512b29fbb7184da84a092f842b2a06d72a24a5d28 mykey.pub]",
+				Usage: "outputs the public key for a private hexseed to a file or to console [eg. qrlft publickey --hexseed=f29f58... mykey.pub]",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "hexseed",
@@ -398,18 +503,30 @@ func main() {
 					&cli.BoolFlag{
 						Name:    "print",
 						Aliases: []string{"p"},
-						Usage:   "prints the public key to the console instead of writing to a file [eg. qrlft publickey --print --hexseed=f29f58aff0b00de2844f7e20bd9eeaacc379150043beeb328335817512b29fbb7184da84a092f842b2a06d72a24a5d28]",
+						Usage:   "prints the public key to the console instead of writing to a file",
 					},
+					algorithmFlag,
+					contextFlag,
 				},
 				Action: func(ctx *cli.Context) error {
 					if ctx.String("hexseed") == "" {
 						return cli.Exit("No hexseed provided", 78)
 					}
 					hexseed := ctx.String("hexseed")
-					// if first two chars are "0x" remove them
-					if hexseed[:2] == "0x" {
+					if len(hexseed) >= 2 && hexseed[:2] == "0x" {
 						hexseed = hexseed[2:]
 					}
+
+					algorithm := ctx.String("algorithm")
+					contextStr := ctx.String("context")
+					var context []byte
+					if algorithm == qcrypto.AlgorithmMLDSA {
+						if contextStr == "" {
+							return cli.Exit("Context is required for ML-DSA-87. Use --context flag.", 78)
+						}
+						context = []byte(contextStr)
+					}
+
 					files := ctx.Args().Slice()
 					writeToConsole := false
 
@@ -419,31 +536,39 @@ func main() {
 					if len(files) == 0 && !writeToConsole {
 						return cli.Exit("Please specify an output file or use the --print flag to dump the public key to the console", 62)
 					}
-					d, err := dilithium.NewDilithiumFromHexSeed(hexseed)
-					pkBin := d.GetPK()
-					pk := hex.EncodeToString(pkBin[:])
+
+					signer, err := qcrypto.NewSigner(algorithm, hexseed, context)
 					if err != nil {
-						return cli.Exit("failed to generate dilithium public key from the hexseed provided", 61)
+						return cli.Exit("failed to generate public key from the hexseed provided: "+err.Error(), 61)
 					}
+
+					pkBin := signer.GetPK()
+					pk := hex.EncodeToString(pkBin)
+
+					_, pemPK, _ := qcrypto.GetPEMHeaders(algorithm)
+
 					if !writeToConsole {
-						if err := os.WriteFile(files[0], []byte("-----BEGIN DILITHIUM PUBLIC KEY-----"+hexStringToRFC7468(pk)+"\n-----END DILITHIUM PUBLIC KEY-----"), 0644); err != nil {
+						if err := os.WriteFile(files[0], []byte("-----BEGIN "+pemPK+"-----"+hexStringToRFC7468(pk)+"\n-----END "+pemPK+"-----"), 0644); err != nil {
 							return cli.Exit("failed to write public key to file", 62)
 						}
 						return cli.Exit("", 0)
 					} else {
 						fmt.Printf("%s\n", pk)
 					}
-					// }
 					return cli.Exit("", 0)
 				},
 			},
 			{
 				Name:  "hash",
-				Usage: "hashes a file with algorithm selected in options [eg. qrlft hash --sha256 doc.txt]",
+				Usage: "hashes a file with a post-quantum secure algorithm [eg. qrlft hash --sha3-512 doc.txt]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "sha3-512",
-						Usage: "hash with SHA3-512",
+						Usage: "hash with SHA3-512 (recommended)",
+					},
+					&cli.BoolFlag{
+						Name:  "sha256",
+						Usage: "hash with SHA-256",
 					},
 					&cli.BoolFlag{
 						Name:  "keccak-256",
@@ -454,24 +579,8 @@ func main() {
 						Usage: "hash with Keccak-512",
 					},
 					&cli.BoolFlag{
-						Name:  "sha256",
-						Usage: "hash with SHA256",
-					},
-					&cli.BoolFlag{
-						Name:  "sha1",
-						Usage: "hash with SHA1",
-					},
-					&cli.BoolFlag{
-						Name:  "md5",
-						Usage: "hash with MD5",
-					},
-					&cli.BoolFlag{
-						Name:  "crc32",
-						Usage: "hash with CRC32",
-					},
-					&cli.BoolFlag{
 						Name:  "blake2s",
-						Usage: "hash with BLAKE2s",
+						Usage: "hash with BLAKE2s-256",
 					},
 					&cli.BoolFlag{
 						Name:  "quiet",
@@ -480,7 +589,7 @@ func main() {
 					&cli.BoolFlag{
 						Name:    "string",
 						Aliases: []string{"s"},
-						Usage:   "hash a string instead of a file [eg. qrlft hash --sha256 HashThisText]",
+						Usage:   "hash a string instead of a file [eg. qrlft hash --sha3-512 -s HashThisText]",
 					},
 				},
 				Action: func(ctx *cli.Context) error {
@@ -491,20 +600,11 @@ func main() {
 						if len(files) == 0 {
 							return cli.Exit("No string provided", 73)
 						}
-						if ctx.Bool("sha256") {
-							return cli.Exit(hash.SHA256string(files[0]), 0)
-						}
-						if ctx.Bool("sha1") {
-							return cli.Exit(hash.SHA1string(files[0]), 0)
-						}
-						if ctx.Bool("md5") {
-							return cli.Exit(hash.MD5string(files[0]), 0)
-						}
-						if ctx.Bool("crc32") {
-							return cli.Exit(hash.CRC32string(files[0]), 0)
-						}
 						if ctx.Bool("sha3-512") {
 							return cli.Exit(hash.SHA3512string(files[0]), 0)
+						}
+						if ctx.Bool("sha256") {
+							return cli.Exit(hash.SHA256string(files[0]), 0)
 						}
 						if ctx.Bool("keccak-256") {
 							return cli.Exit(hash.Keccak256string(files[0]), 0)
@@ -536,35 +636,11 @@ func main() {
 							return cli.Exit("Error when hashing "+file, 77)
 						}
 						if fileinfo.IsDir() {
-							// skip this iteration
 							continue
 						}
 						// sha3-512
 						if ctx.Bool("sha3-512") {
 							x, err := hash.SHA3512sum(file)
-							// if file doesn't exist return an error
-							if err != nil {
-								return cli.Exit("File "+file+" not found", 83)
-							}
-							output(file, x, ctx.Bool("quiet"))
-							action = true
-						}
-
-						// keccak-256
-						if ctx.Bool("keccak-256") {
-							x, err := hash.Keccak256sum(file)
-							// if file doesn't exist return an error
-							if err != nil {
-								return cli.Exit("File "+file+" not found", 83)
-							}
-							output(file, x, ctx.Bool("quiet"))
-							action = true
-						}
-
-						// keccak-512
-						if ctx.Bool("keccak-512") {
-							x, err := hash.Keccak512sum(file)
-							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
 							}
@@ -575,7 +651,6 @@ func main() {
 						// sha256
 						if ctx.Bool("sha256") {
 							x, err := hash.SHA256sum(file)
-							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
 							}
@@ -583,10 +658,9 @@ func main() {
 							action = true
 						}
 
-						// md5
-						if ctx.Bool("md5") {
-							x, err := hash.MD5sum(file)
-							// if file doesn't exist return an error
+						// keccak-256
+						if ctx.Bool("keccak-256") {
+							x, err := hash.Keccak256sum(file)
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
 							}
@@ -594,21 +668,9 @@ func main() {
 							action = true
 						}
 
-						// crc32
-						if ctx.Bool("crc32") {
-							x, err := hash.CRC32(file)
-							// if file doesn't exist return an error
-							if err != nil {
-								return cli.Exit("File "+file+" not found", 83)
-							}
-							output(file, x, ctx.Bool("quiet"))
-							action = true
-						}
-
-						// sha1
-						if ctx.Bool("sha1") {
-							x, err := hash.SHA1sum(file)
-							// if file doesn't exist return an error
+						// keccak-512
+						if ctx.Bool("keccak-512") {
+							x, err := hash.Keccak512sum(file)
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
 							}
@@ -619,7 +681,6 @@ func main() {
 						// blake2s
 						if ctx.Bool("blake2s") {
 							x, err := hash.Blake2s256(file)
-							// if file doesn't exist return an error
 							if err != nil {
 								return cli.Exit("File "+file+" not found", 83)
 							}
@@ -651,22 +712,39 @@ func main() {
 				},
 			},
 			{
-				Name:  "new-dilithium",
-				Usage: "generates new dilithium keypair",
+				Name:    "new-keypair",
+				Aliases: []string{"new-dilithium"},
+				Usage:   "generates new keypair (dilithium or mldsa)",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:    "print",
 						Aliases: []string{"p"},
-						Usage:   "prints the public/private keys and hexseed to the console instead of writing to a file [eg. qrlft new-dilithium --print]",
+						Usage:   "prints the public/private keys and hexseed to the console instead of writing to a file",
 					},
+					algorithmFlag,
+					contextFlag,
 				},
 				Action: func(ctx *cli.Context) error {
-					d, _ := dilithium.New()
-					sk := d.GetSK()
-					skBytes := sk[:]
-					pk := d.GetPK()
-					pkBytes := pk[:]
-					hs := d.GetHexSeed()
+					algorithm := ctx.String("algorithm")
+					contextStr := ctx.String("context")
+					var context []byte
+
+					if algorithm == qcrypto.AlgorithmMLDSA {
+						if contextStr == "" {
+							return cli.Exit("Context is required for ML-DSA-87. Use --context flag.", 78)
+						}
+						context = []byte(contextStr)
+					}
+
+					signer, err := qcrypto.NewKeypair(algorithm, context)
+					if err != nil {
+						return cli.Exit("Failed to generate keypair: "+err.Error(), 61)
+					}
+
+					sk := signer.GetSK()
+					pk := signer.GetPK()
+					hs := signer.GetHexSeed()
+
 					files := ctx.Args().Slice()
 					writeToConsole := false
 
@@ -678,21 +756,21 @@ func main() {
 						return cli.Exit("Please specify an output file or use the --print flag to dump the keys to the console", 62)
 					}
 
+					pemSK, pemPK, pemHS := qcrypto.GetPEMHeaders(algorithm)
+
 					if writeToConsole {
-						fmt.Printf("Private Key:\n%s\n\n", hex.EncodeToString(skBytes))
-						fmt.Printf("Public Key: \n%s\n\n", hex.EncodeToString(pkBytes))
+						fmt.Printf("Private Key:\n%s\n\n", hex.EncodeToString(sk))
+						fmt.Printf("Public Key: \n%s\n\n", hex.EncodeToString(pk))
 						fmt.Printf("Hexseed: \n%s\n", hs)
-						// fmt.Printf("Public Key: %s\n", hexStringToRFC7468(hex.EncodeToString(pkBytes)))
-						// fmt.Printf("Private Key: %s\n", hexStringToRFC7468(hex.EncodeToString(skBytes)))
 					} else {
 						fmt.Printf("Write to file: %s\n", files[0])
-						if err := os.WriteFile(files[0], []byte("-----BEGIN DILITHIUM PRIVATE KEY-----"+hexStringToRFC7468(hex.EncodeToString(skBytes))+"\n-----END DILITHIUM PRIVATE KEY-----\n"), 0644); err != nil {
+						if err := os.WriteFile(files[0], []byte("-----BEGIN "+pemSK+"-----"+hexStringToRFC7468(hex.EncodeToString(sk))+"\n-----END "+pemSK+"-----\n"), 0644); err != nil {
 							return cli.Exit("failed to write private key to file", 62)
 						}
-						if err := os.WriteFile(files[0]+".pub", []byte("-----BEGIN DILITHIUM PUBLIC KEY-----"+hexStringToRFC7468(hex.EncodeToString(pkBytes))+"\n-----END DILITHIUM PUBLIC KEY-----\n"), 0644); err != nil {
+						if err := os.WriteFile(files[0]+".pub", []byte("-----BEGIN "+pemPK+"-----"+hexStringToRFC7468(hex.EncodeToString(pk))+"\n-----END "+pemPK+"-----\n"), 0644); err != nil {
 							return cli.Exit("failed to write public key to file", 62)
 						}
-						if err := os.WriteFile(files[0]+".private.hexseed", []byte("-----BEGIN DILITHIUM PRIVATE HEXSEED-----\n"+hs+"\n-----END DILITHIUM PRIVATE HEXSEED-----\n"), 0644); err != nil {
+						if err := os.WriteFile(files[0]+".private.hexseed", []byte("-----BEGIN "+pemHS+"-----\n"+hs+"\n-----END "+pemHS+"-----\n"), 0644); err != nil {
 							return cli.Exit("failed to write private hexseed to file", 62)
 						}
 					}

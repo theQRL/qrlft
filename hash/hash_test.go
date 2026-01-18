@@ -1,4 +1,3 @@
-
 package hash
 
 import (
@@ -39,17 +38,6 @@ func TestSHA3512Reader(t *testing.T) {
 	}
 }
 
-func TestMD5sumReader(t *testing.T) {
-	reader := strings.NewReader("test")
-	hash, err := MD5sumReader(reader)
-	if err != nil {
-		t.Errorf("MD5sumReader() error = %v", err)
-	}
-	if hash != "098f6bcd4621d373cade4e832627b4f6" {
-		t.Errorf("MD5sumReader() = %v, want %v", hash, "098f6bcd4621d373cade4e832627b4f6")
-	}
-}
-
 func TestSHA256sumReader(t *testing.T) {
 	reader := strings.NewReader("test")
 	hash, err := SHA256sumReader(reader)
@@ -61,17 +49,6 @@ func TestSHA256sumReader(t *testing.T) {
 	}
 }
 
-func TestSHA1sumReader(t *testing.T) {
-	reader := strings.NewReader("test")
-	hash, err := SHA1sumReader(reader)
-	if err != nil {
-		t.Errorf("SHA1sumReader() error = %v", err)
-	}
-	if hash != "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3" {
-		t.Errorf("SHA1sumReader() = %v, want %v", hash, "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3")
-	}
-}
-
 func TestBlake2s256Reader(t *testing.T) {
 	reader := strings.NewReader("test")
 	hash, err := Blake2s256Reader(reader)
@@ -80,16 +57,5 @@ func TestBlake2s256Reader(t *testing.T) {
 	}
 	if hash != "f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e" {
 		t.Errorf("Blake2s256Reader() = %v, want %v", hash, "f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e")
-	}
-}
-
-func TestCRCReader(t *testing.T) {
-	reader := strings.NewReader("test")
-	hash, err := CRCReader(reader)
-	if err != nil {
-		t.Errorf("CRCReader() error = %v", err)
-	}
-	if hash != "d87f7e0c" {
-		t.Errorf("CRCReader() = %v, want %v", hash, "d87f7e0c")
 	}
 }

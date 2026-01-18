@@ -10,7 +10,7 @@ import (
 )
 
 func TestSignString(t *testing.T) {
-	hexseed := "a3c0d45de8b5053d44888d6cc9a8690db5c9296ade4f524f252de893477ff849c11a95e8a9477297634064f207500d14"
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
 	signature, err := SignString("test", hexseed)
 	if err != nil {
 		t.Errorf("SignString() error = %v", err)
