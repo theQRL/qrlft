@@ -3,6 +3,7 @@ package sign
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/theQRL/go-qrllib/crypto/dilithium"
@@ -10,17 +11,17 @@ import (
 )
 
 // SignMessage signs a message using a hexseed (Dilithium, for backward compatibility)
-func SignMessage(message []byte, hexseed string) string {
+func SignMessage(message []byte, hexseed string) (string, error) {
 	d, err := dilithium.NewDilithiumFromHexSeed(hexseed)
 	if err != nil {
-		panic("failed to generate new dilithium from seed " + err.Error())
+		return "", fmt.Errorf("failed to generate dilithium from seed: %w", err)
 	}
 
 	signature, err := d.Sign(message)
 	if err != nil {
-		panic("failed to sign " + err.Error())
+		return "", fmt.Errorf("failed to sign message: %w", err)
 	}
-	return hex.EncodeToString(signature[:])
+	return hex.EncodeToString(signature[:]), nil
 }
 
 // SignMessageWithPrivateKey signs a message using a private key (secret key) directly
@@ -29,6 +30,7 @@ func SignMessageWithPrivateKey(message []byte, privateKeyHex string) (string, er
 	if err != nil {
 		return "", errors.New("failed to decode private key: " + err.Error())
 	}
+	defer crypto.ZeroBytes(skBytes) // Zero decoded key bytes when done
 
 	if len(skBytes) != dilithium.CRYPTO_SECRET_KEY_BYTES {
 		return "", errors.New("invalid private key length")
@@ -36,6 +38,7 @@ func SignMessageWithPrivateKey(message []byte, privateKeyHex string) (string, er
 
 	var sk [dilithium.CRYPTO_SECRET_KEY_BYTES]uint8
 	copy(sk[:], skBytes)
+	defer crypto.ZeroBytes(sk[:]) // Zero secret key array when done
 
 	signature, err := dilithium.SignWithSecretKey(message, &sk)
 	if err != nil {
@@ -51,12 +54,12 @@ func SignFile(filename string, hexseed string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return SignMessage(message, hexseed), nil
+	return SignMessage(message, hexseed)
 }
 
 // SignString signs a string using a hexseed (Dilithium, for backward compatibility)
 func SignString(stringToSign string, hexseed string) (string, error) {
-	return SignMessage([]byte(stringToSign), hexseed), nil
+	return SignMessage([]byte(stringToSign), hexseed)
 }
 
 // SignFileWithPrivateKey signs a file using a private key directly
@@ -125,7 +128,7 @@ func readFile(filename string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	fileinfo, err := file.Stat()
 	if err != nil {

@@ -6,24 +6,48 @@ on:
   pull_request:
     branches:
       - '**'
+
+permissions:
+  contents: read
+
 jobs:
-  lint:
+  actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install actionlint
+        run: |
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+      - name: Run actionlint
+        run: ./actionlint -color
+  lint:
+    runs-on: ubuntu-latest
+    needs: actionlint
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: 1.22
-      - uses: golangci/golangci-lint-action@v3
+          go-version: '1.22'
+      - uses: golangci/golangci-lint-action@8564da7cb3c6866ed1da648ca8f00a258ef0c802 # v6.5.2
   test:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: 1.22
-      - run: go test -v ./...
+          go-version: '1.22'
+      - name: Run unit tests
+        run: go test -v ./...
+      - name: Run e2e tests
+        run: make test-e2e
+      - name: Generate coverage report
+        run: make coverage
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@0561704f0f02c16a585d4c7555e57fa2e44cf909 # v5.5.2
+        with:
+          files: coverage.out
+          fail_ci_if_error: false
   release:
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
@@ -31,24 +55,25 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: 1.22
-      - uses: go-semantic-release/action@v1
+          go-version: '1.22'
+      - uses: go-semantic-release/action@453e003c94ddb9c64e7ea4153794ef69e477259e # v1
+        id: semrel
         with:
           hooks: goreleaser
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Signs with Dilithium
         if: steps.semrel.outputs.version != ''
-        uses: theQRL/actions-dilithium-sign@v1
+        uses: theQRL/actions-dilithium-sign@b45eedda2c2977608cb74867e7d5326e22b0be91 # v1
         with:
           patterns: |
             dist/*.zip
           hexseed: ${{ secrets.DILITHIUM_HEXSEED }}
           output: sig.txt
-      - uses: actions-ecosystem/action-get-latest-tag@v1
+      - uses: actions-ecosystem/action-get-latest-tag@b7c32daec3395a9616f88548363a42652b22d435 # v1
         if: steps.semrel.outputs.version != ''
         id: get-latest-tag
         with:
@@ -58,7 +83,7 @@ jobs:
         run: |
           sed 's/dist\///g' sig.txt >qrlft_${{ steps.get-latest-tag.outputs.tag }}_signatures.txt
       - name: Add to release
-        uses: AButler/upload-release-assets@v2.0
+        uses: AButler/upload-release-assets@c94805dc72e4b20745f543da0f62eaee7722df7a # v2.0.2
         if: steps.semrel.outputs.version != ''
         with:
           files: qrlft_${{ steps.get-latest-tag.outputs.tag }}_signatures.txt

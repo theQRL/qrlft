@@ -3,6 +3,7 @@ package verify
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/theQRL/go-qrllib/crypto/dilithium"
@@ -20,26 +21,42 @@ func VerifyFile(filename string, signature string, pk string) (bool, error) {
 
 // VerifyMessage verifies a signature against a message (Dilithium, for backward compatibility)
 func VerifyMessage(message []byte, signature string, pk string) (bool, error) {
+	// Validate and decode signature
+	fSig, err := hex.DecodeString(signature)
+	if err != nil {
+		return false, fmt.Errorf("invalid signature hex: %w", err)
+	}
+	if len(fSig) != dilithium.CRYPTO_BYTES {
+		return false, fmt.Errorf("invalid signature length: got %d, expected %d", len(fSig), dilithium.CRYPTO_BYTES)
+	}
+
 	var sigBytes [dilithium.CRYPTO_BYTES]uint8
-	fSig, _ := hex.DecodeString(signature)
 	copy(sigBytes[:], fSig)
 
-	pkBytes := PKHStrToBin(pk)
+	// Validate and decode public key
+	pkBytes, err := PKHStrToBin(pk)
+	if err != nil {
+		return false, err
+	}
 
 	return dilithium.Verify(message, sigBytes, &pkBytes), nil
 }
 
 // PKHStrToBin converts a public key hex string to binary array (Dilithium)
-func PKHStrToBin(pkHStr string) [dilithium.CRYPTO_PUBLIC_KEY_BYTES]uint8 {
-	if len(pkHStr) != 2*dilithium.CRYPTO_PUBLIC_KEY_BYTES {
-		panic("Invalid pkHStr")
-	}
+func PKHStrToBin(pkHStr string) ([dilithium.CRYPTO_PUBLIC_KEY_BYTES]uint8, error) {
 	var pk [dilithium.CRYPTO_PUBLIC_KEY_BYTES]uint8
-	pkDecode, _ := hex.DecodeString(pkHStr)
+
+	if len(pkHStr) != 2*dilithium.CRYPTO_PUBLIC_KEY_BYTES {
+		return pk, fmt.Errorf("invalid public key length: got %d hex chars, expected %d", len(pkHStr), 2*dilithium.CRYPTO_PUBLIC_KEY_BYTES)
+	}
+
+	pkDecode, err := hex.DecodeString(pkHStr)
+	if err != nil {
+		return pk, fmt.Errorf("invalid public key hex: %w", err)
+	}
 
 	copy(pk[:], pkDecode)
-
-	return pk
+	return pk, nil
 }
 
 // VerifyFileWithVerifier verifies a signature against a file using a Verifier interface
@@ -90,7 +107,7 @@ func readFile(filename string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	fileinfo, err := file.Stat()
 	if err != nil {

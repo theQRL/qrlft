@@ -67,7 +67,7 @@ fix(verify): handle trailing whitespace in signature files
 ```
 docs: update README with ML-DSA examples
 chore: update dependencies
-test: add integration tests for new-keypair command
+test: add integration tests for new command
 ```
 
 ## Manual Commits (No Release)

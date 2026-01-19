@@ -28,13 +28,16 @@ go build
 
 ```bash
 # Dilithium (default)
-qrlft new-keypair mykey
+qrlft new mykey
+qrlft new -a dilithium mykey
+qrlft new-dilithium mykey  # alias
 
 # ML-DSA-87 (requires context)
-qrlft new-keypair -a mldsa --context="myapp" mykey
+qrlft new -a mldsa --context="myapp" mykey
+qrlft new-mldsa --context="myapp" mykey  # alias
 
 # Print to console instead of file
-qrlft new-keypair --print
+qrlft new --print
 ```
 
 Output files: `mykey` (private key), `mykey.pub` (public key), `mykey.private.hexseed` (hexseed)
@@ -151,6 +154,33 @@ qrlft verify -a mldsa --context="different" --sigfile=doc.sig --pkfile=key.pub d
 | 0 | Success / Signature valid |
 | 1 | Signature invalid |
 | 61-84 | Various errors (missing args, file not found, etc.) |
+
+## Large File Handling
+
+**Hashing** uses streaming reads (64KB buffer) and can handle files of any size with constant memory usage.
+
+**Signing and verification** require the entire file to be loaded into memory because the underlying Dilithium/ML-DSA algorithms need the complete message. For very large files, use the hash-then-sign approach:
+
+```bash
+# 1. Hash the large file (uses streaming - constant memory)
+HASH=$(qrlft hash --sha3-512 --quiet largefile.bin)
+
+# 2. Sign the hash (small string, minimal memory)
+qrlft sign -a dilithium -s --hexseed=abc123... "$HASH" > largefile.sig
+
+# 3. Verify: hash the file and verify the signature matches
+HASH=$(qrlft hash --sha3-512 --quiet largefile.bin)
+# Compare with the signed hash or verify programmatically
+```
+
+This approach is standard practice for signing large files and is used by tools like GPG.
+
+## Security Considerations
+
+- **Private key files** are created with `0600` permissions (owner read/write only)
+- **Public key files** are created with `0644` permissions (world-readable)
+- **Do not expose as a service**: This is a CLI tool designed for local use. Post-quantum cryptographic operations are computationally expensive. If you need to expose signing/verification as a service, implement proper rate limiting, authentication, and resource controls
+- **Context for ML-DSA-87**: Always use a unique, application-specific context string to ensure domain separation between different uses of the same key
 
 ## License
 
