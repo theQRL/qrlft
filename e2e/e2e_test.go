@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 	}
 
 	exitCode := m.Run()
-	os.RemoveAll(tempDir)
+	_ = os.RemoveAll(tempDir)
 	os.Exit(exitCode)
 }
 
@@ -220,7 +220,7 @@ func TestDilithiumSignVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	testFile := filepath.Join(tempDir, "test.txt")
 	if err := os.WriteFile(testFile, []byte("Hello, World!"), 0644); err != nil {
@@ -278,7 +278,7 @@ func TestMLDSASignVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	testFile := filepath.Join(tempDir, "test.txt")
 	if err := os.WriteFile(testFile, []byte("Hello, World!"), 0644); err != nil {
@@ -368,7 +368,7 @@ func TestStringSignVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	testFile := filepath.Join(tempDir, "test.txt")
 	if err := os.WriteFile(testFile, []byte(testString), 0644); err != nil {
@@ -392,7 +392,7 @@ func TestKeyFileWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	keyBasePath := filepath.Join(tempDir, "testkey")
 	testFile := filepath.Join(tempDir, "test.txt")
@@ -449,7 +449,7 @@ func TestAlgorithmMismatchDetection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create an MLDSA key file
 	keyPath := filepath.Join(tempDir, "mldskey")
@@ -479,7 +479,7 @@ func TestHashCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	testFile := filepath.Join(tempDir, "test.txt")
 	if err := os.WriteFile(testFile, []byte("Hello, World!"), 0644); err != nil {
@@ -506,7 +506,8 @@ func TestHashCommands(t *testing.T) {
 			}
 			// Verify it's a valid hex string
 			for _, c := range hash {
-				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				isHexDigit := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+				if !isHexDigit {
 					t.Errorf("invalid character in hash output: %c", c)
 					break
 				}

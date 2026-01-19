@@ -28,7 +28,7 @@ func readKeyFromFile(filepath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	fileinfo, err := file.Stat()
 	if err != nil {

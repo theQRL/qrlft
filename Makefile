@@ -1,7 +1,7 @@
 BINARY_NAME=qrlft
 COVERAGE_FILE=coverage.out
 
-.PHONY: build test test-e2e test-all coverage coverage-html lint-workflows clean
+.PHONY: build test test-e2e test-all coverage coverage-html lint lint-workflows clean
 
 build:
 	go build -o $(BINARY_NAME) .
@@ -20,6 +20,10 @@ coverage:
 
 coverage-html: coverage
 	go tool cover -html=$(COVERAGE_FILE) -o coverage.html
+
+lint:
+	@which golangci-lint > /dev/null || (echo "golangci-lint not installed. Install with: brew install golangci-lint" && exit 1)
+	golangci-lint run
 
 lint-workflows:
 	@which actionlint > /dev/null || (echo "actionlint not installed. Install with: brew install actionlint" && exit 1)

@@ -76,7 +76,7 @@ func readKeyFromFile(filepath string) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("could not open key file %s: %w", filepath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	fileinfo, err := file.Stat()
 	if err != nil {
@@ -163,7 +163,7 @@ func readPublicKeyFromFile(filepath string) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("could not open public key file %s: %w", filepath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	fileinfo, err := file.Stat()
 	if err != nil {
@@ -291,7 +291,7 @@ func main() {
 						if err != nil {
 							return cli.Exit("Error when verifying "+file, 78)
 						}
-						defer filecheck.Close()
+						defer func() { _ = filecheck.Close() }()
 
 						fileinfo, err := filecheck.Stat()
 						if err != nil {
@@ -307,7 +307,7 @@ func main() {
 							if err != nil {
 								return cli.Exit("Could not open signature file "+ctx.String("sigfile"), 71)
 							}
-							defer sigfile.Close()
+							defer func() { _ = sigfile.Close() }()
 
 							sigfileinfo, err := sigfile.Stat()
 							if err != nil {
@@ -465,7 +465,7 @@ func main() {
 						if err != nil {
 							return cli.Exit("Error when signing "+file+" - "+err.Error(), 78)
 						}
-						defer filecheck.Close()
+						defer func() { _ = filecheck.Close() }()
 
 						fileinfo, err := filecheck.Stat()
 						if err != nil {
@@ -532,11 +532,7 @@ func main() {
 					}
 
 					files := ctx.Args().Slice()
-					writeToConsole := false
-
-					if ctx.Bool("print") {
-						writeToConsole = true
-					}
+					writeToConsole := ctx.Bool("print")
 					if len(files) == 0 && !writeToConsole {
 						return cli.Exit("Please specify an output file or use the --print flag to dump the public key to the console", 62)
 					}
@@ -637,7 +633,7 @@ func main() {
 						if err != nil {
 							return cli.Exit("Error when hashing "+file+" - "+err.Error(), 78)
 						}
-						defer filecheck.Close()
+						defer func() { _ = filecheck.Close() }()
 
 						fileinfo, err := filecheck.Stat()
 						if err != nil {
@@ -757,11 +753,7 @@ func main() {
 					hs := signer.GetHexSeed()
 
 					files := ctx.Args().Slice()
-					writeToConsole := false
-
-					if ctx.Bool("print") {
-						writeToConsole = true
-					}
+					writeToConsole := ctx.Bool("print")
 
 					if len(files) == 0 && !writeToConsole {
 						return cli.Exit("Please specify an output file or use the --print flag to dump the keys to the console", 62)
