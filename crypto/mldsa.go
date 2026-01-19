@@ -21,7 +21,10 @@ func NewMLDSASigner(hexseed string, ctx []byte) (*MLDSASigner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &MLDSASigner{d: d, ctx: ctx}, nil
+	// Make a defensive copy of context to prevent caller modifications
+	ctxCopy := make([]byte, len(ctx))
+	copy(ctxCopy, ctx)
+	return &MLDSASigner{d: d, ctx: ctxCopy}, nil
 }
 
 // NewMLDSAKeypair generates a new ML-DSA-87 keypair with context
@@ -33,7 +36,10 @@ func NewMLDSAKeypair(ctx []byte) (*MLDSASigner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &MLDSASigner{d: d, ctx: ctx}, nil
+	// Make a defensive copy of context to prevent caller modifications
+	ctxCopy := make([]byte, len(ctx))
+	copy(ctxCopy, ctx)
+	return &MLDSASigner{d: d, ctx: ctxCopy}, nil
 }
 
 // Sign signs the message using the stored context and returns the signature bytes
@@ -109,7 +115,10 @@ func NewMLDSAVerifier(ctx []byte) (*MLDSAVerifier, error) {
 	if len(ctx) > 255 {
 		return nil, errors.New("context must be 0-255 bytes")
 	}
-	return &MLDSAVerifier{ctx: ctx}, nil
+	// Make a defensive copy of context to prevent caller modifications
+	ctxCopy := make([]byte, len(ctx))
+	copy(ctxCopy, ctx)
+	return &MLDSAVerifier{ctx: ctxCopy}, nil
 }
 
 // Verify verifies an ML-DSA-87 signature using the stored context

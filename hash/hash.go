@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -96,8 +97,12 @@ func Blake2s256(filename string) (string, error) {
 
 // sum calculates the hash based on a provided hash provider
 func sum(hashAlgorithm hash.Hash, filename string) (string, error) {
-	if info, err := os.Stat(filename); err != nil || info.IsDir() {
+	info, err := os.Stat(filename)
+	if err != nil {
 		return "", err
+	}
+	if info.IsDir() {
+		return "", errors.New("cannot hash a directory")
 	}
 
 	file, err := os.Open(filename)

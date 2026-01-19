@@ -3,14 +3,14 @@ package crypto
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // NewSigner creates a new Signer based on the algorithm
 // For ML-DSA, context is required (can be empty but not nil for explicit empty context)
 func NewSigner(algorithm, hexseed string, context []byte) (Signer, error) {
 	switch algorithm {
-	case AlgorithmDilithium, "":
-		// Empty string defaults to Dilithium for backward compatibility
+	case AlgorithmDilithium:
 		return NewDilithiumSigner(hexseed)
 	case AlgorithmMLDSA:
 		if context == nil {
@@ -25,7 +25,7 @@ func NewSigner(algorithm, hexseed string, context []byte) (Signer, error) {
 // NewKeypair creates a new keypair for the specified algorithm
 func NewKeypair(algorithm string, context []byte) (Signer, error) {
 	switch algorithm {
-	case AlgorithmDilithium, "":
+	case AlgorithmDilithium:
 		return NewDilithiumKeypair()
 	case AlgorithmMLDSA:
 		if context == nil {
@@ -41,7 +41,7 @@ func NewKeypair(algorithm string, context []byte) (Signer, error) {
 // For ML-DSA, context is required (can be empty but not nil for explicit empty context)
 func NewVerifier(algorithm string, context []byte) (Verifier, error) {
 	switch algorithm {
-	case AlgorithmDilithium, "":
+	case AlgorithmDilithium:
 		return NewDilithiumVerifier(), nil
 	case AlgorithmMLDSA:
 		if context == nil {
@@ -64,26 +64,22 @@ func GetPEMHeaders(algorithm string) (privateKey, publicKey, hexseed string) {
 }
 
 // DetectAlgorithmFromPEM detects the algorithm from PEM headers
+// Only examines PEM header lines (-----BEGIN/END) to avoid false matches
+// from content within the base64 payload
 // Returns the algorithm name or empty string if unknown
 func DetectAlgorithmFromPEM(content string) string {
-	if contains(content, "ML-DSA-87") {
-		return AlgorithmMLDSA
-	}
-	if contains(content, "DILITHIUM") {
-		return AlgorithmDilithium
-	}
-	return ""
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr))
-}
-
-func containsAt(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Only check PEM header/footer lines
+		if strings.HasPrefix(line, "-----BEGIN ") || strings.HasPrefix(line, "-----END ") {
+			if strings.Contains(line, "ML-DSA-87") {
+				return AlgorithmMLDSA
+			}
+			if strings.Contains(line, "DILITHIUM") {
+				return AlgorithmDilithium
+			}
 		}
 	}
-	return false
+	return ""
 }

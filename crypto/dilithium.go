@@ -21,19 +21,6 @@ func NewDilithiumSigner(hexseed string) (*DilithiumSigner, error) {
 	return &DilithiumSigner{d: d}, nil
 }
 
-// NewDilithiumSignerFromSK creates a signer from a secret key hex string
-func NewDilithiumSignerFromSK(skHex string) (*DilithiumSigner, error) {
-	skBytes, err := hex.DecodeString(skHex)
-	if err != nil {
-		return nil, errors.New("failed to decode secret key: " + err.Error())
-	}
-	if len(skBytes) != dilithium.CRYPTO_SECRET_KEY_BYTES {
-		return nil, errors.New("invalid secret key length")
-	}
-	// Create a wrapper that holds the secret key for signing
-	return &DilithiumSigner{d: nil}, errors.New("DilithiumSigner from SK not fully supported - use hexseed")
-}
-
 // NewDilithiumKeypair generates a new Dilithium keypair
 func NewDilithiumKeypair() (*DilithiumSigner, error) {
 	d, err := dilithium.New()
@@ -148,12 +135,15 @@ func SignWithDilithiumSK(message []byte, skHex string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("failed to decode secret key: " + err.Error())
 	}
+	defer ZeroBytes(skBytes) // Zero decoded key bytes when done
+
 	if len(skBytes) != dilithium.CRYPTO_SECRET_KEY_BYTES {
 		return nil, errors.New("invalid secret key length")
 	}
 
 	var sk [dilithium.CRYPTO_SECRET_KEY_BYTES]uint8
 	copy(sk[:], skBytes)
+	defer ZeroBytes(sk[:]) // Zero secret key array when done
 
 	sig, err := dilithium.SignWithSecretKey(message, &sk)
 	if err != nil {

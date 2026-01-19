@@ -1,5 +1,14 @@
 package crypto
 
+// ZeroBytes securely zeros a byte slice to prevent sensitive data from
+// remaining in memory longer than necessary. This should be called on
+// secret key material after use.
+func ZeroBytes(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+}
+
 // Signer defines the interface for cryptographic signing operations
 type Signer interface {
 	// Sign signs the message and returns the signature

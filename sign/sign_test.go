@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/theQRL/qrlft/crypto"
 )
 
 func TestSignString(t *testing.T) {
@@ -182,5 +184,176 @@ func TestSignaturesMatch(t *testing.T) {
 
 	if sig1 != sig2 {
 		t.Errorf("Signatures don't match: hexseed signature length=%d, private key signature length=%d", len(sig1), len(sig2))
+	}
+}
+
+// ==================== WithAlgorithm tests ====================
+
+func TestSignStringWithAlgorithm(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	sig, err := SignStringWithAlgorithm("test", hexseed, "dilithium", nil)
+	if err != nil {
+		t.Errorf("SignStringWithAlgorithm() error = %v", err)
+	}
+	if len(sig) == 0 {
+		t.Error("SignStringWithAlgorithm() returned empty signature")
+	}
+}
+
+func TestSignStringWithAlgorithmMLDSA(t *testing.T) {
+	hexseed := "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+	context := []byte("test-context")
+	sig, err := SignStringWithAlgorithm("test", hexseed, "mldsa", context)
+	if err != nil {
+		t.Errorf("SignStringWithAlgorithm(mldsa) error = %v", err)
+	}
+	if len(sig) == 0 {
+		t.Error("SignStringWithAlgorithm(mldsa) returned empty signature")
+	}
+}
+
+func TestSignStringWithAlgorithmInvalidAlgorithm(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	_, err := SignStringWithAlgorithm("test", hexseed, "invalid", nil)
+	if err == nil {
+		t.Error("SignStringWithAlgorithm() expected error for invalid algorithm")
+	}
+}
+
+func TestSignMessageWithAlgorithm(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	sig, err := SignMessageWithAlgorithm([]byte("test"), hexseed, "dilithium", nil)
+	if err != nil {
+		t.Errorf("SignMessageWithAlgorithm() error = %v", err)
+	}
+	if len(sig) == 0 {
+		t.Error("SignMessageWithAlgorithm() returned empty signature")
+	}
+}
+
+func TestSignFileWithAlgorithm(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	testFile := filepath.Join("..", "test_vectors", "ascii.txt")
+	sig, err := SignFileWithAlgorithm(testFile, hexseed, "dilithium", nil)
+	if err != nil {
+		t.Errorf("SignFileWithAlgorithm() error = %v", err)
+	}
+	if len(sig) == 0 {
+		t.Error("SignFileWithAlgorithm() returned empty signature")
+	}
+}
+
+func TestSignFileWithAlgorithmNonexistent(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	_, err := SignFileWithAlgorithm("/nonexistent/file.txt", hexseed, "dilithium", nil)
+	if err == nil {
+		t.Error("SignFileWithAlgorithm() expected error for nonexistent file")
+	}
+}
+
+// ==================== WithSigner tests ====================
+
+func TestSignMessageWithSigner(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	signer, err := crypto.NewSigner("dilithium", hexseed, nil)
+	if err != nil {
+		t.Fatalf("NewSigner() error = %v", err)
+	}
+
+	sig, err := SignMessageWithSigner([]byte("test"), signer)
+	if err != nil {
+		t.Errorf("SignMessageWithSigner() error = %v", err)
+	}
+	if len(sig) == 0 {
+		t.Error("SignMessageWithSigner() returned empty signature")
+	}
+}
+
+func TestSignFileWithSigner(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	signer, err := crypto.NewSigner("dilithium", hexseed, nil)
+	if err != nil {
+		t.Fatalf("NewSigner() error = %v", err)
+	}
+
+	testFile := filepath.Join("..", "test_vectors", "ascii.txt")
+	sig, err := SignFileWithSigner(testFile, signer)
+	if err != nil {
+		t.Errorf("SignFileWithSigner() error = %v", err)
+	}
+	if len(sig) == 0 {
+		t.Error("SignFileWithSigner() returned empty signature")
+	}
+}
+
+func TestSignFileWithSignerNonexistent(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	signer, _ := crypto.NewSigner("dilithium", hexseed, nil)
+
+	_, err := SignFileWithSigner("/nonexistent/file.txt", signer)
+	if err == nil {
+		t.Error("SignFileWithSigner() expected error for nonexistent file")
+	}
+}
+
+func TestSignStringWithSigner(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	signer, err := crypto.NewSigner("dilithium", hexseed, nil)
+	if err != nil {
+		t.Fatalf("NewSigner() error = %v", err)
+	}
+
+	sig, err := SignStringWithSigner("test", signer)
+	if err != nil {
+		t.Errorf("SignStringWithSigner() error = %v", err)
+	}
+	if len(sig) == 0 {
+		t.Error("SignStringWithSigner() returned empty signature")
+	}
+}
+
+// ==================== Error path tests ====================
+
+func TestSignMessageWithPrivateKeyInvalidHex(t *testing.T) {
+	_, err := SignMessageWithPrivateKey([]byte("test"), "not-valid-hex")
+	if err == nil {
+		t.Error("SignMessageWithPrivateKey() expected error for invalid hex")
+	}
+}
+
+func TestSignMessageWithPrivateKeyWrongLength(t *testing.T) {
+	_, err := SignMessageWithPrivateKey([]byte("test"), "abcd1234")
+	if err == nil {
+		t.Error("SignMessageWithPrivateKey() expected error for wrong length")
+	}
+}
+
+func TestSignFileNonexistent(t *testing.T) {
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	_, err := SignFile("/nonexistent/file.txt", hexseed)
+	if err == nil {
+		t.Error("SignFile() expected error for nonexistent file")
+	}
+}
+
+func TestSignFileWithPrivateKeyNonexistent(t *testing.T) {
+	// Create a valid private key first
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	signer, _ := crypto.NewSigner("dilithium", hexseed, nil)
+	sk := signer.GetSK()
+	skHex := hex.EncodeToString(sk)
+
+	_, err := SignFileWithPrivateKey("/nonexistent/file.txt", skHex)
+	if err == nil {
+		t.Error("SignFileWithPrivateKey() expected error for nonexistent file")
+	}
+}
+
+func TestReadFileDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
+	_, err := SignFile(tempDir, hexseed)
+	if err == nil {
+		t.Error("SignFile() expected error for directory")
 	}
 }
