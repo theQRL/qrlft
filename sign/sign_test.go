@@ -328,6 +328,44 @@ func TestSignMessageWithPrivateKeyWrongLength(t *testing.T) {
 	}
 }
 
+// TestMLDSAPrivateKeyFailsClosed verifies that an ML-DSA-87 private key is never
+// silently signed with pre-FIPS Dilithium (regression test for the silent
+// algorithm downgrade: the ML-DSA-87 secret key is the same size as the
+// Dilithium secret key, so the old length-only check let it through).
+func TestMLDSAPrivateKeyFailsClosed(t *testing.T) {
+	// Generate an ML-DSA-87 keypair (same 4896-byte secret key size as Dilithium)
+	signer, err := crypto.NewKeypair(crypto.AlgorithmMLDSA, []byte("test-context"))
+	if err != nil {
+		t.Fatalf("NewKeypair(mldsa) error = %v", err)
+	}
+	skHex := hex.EncodeToString(signer.GetSK())
+
+	// The CLI path: sign with the private key while requesting ML-DSA.
+	// This must fail closed instead of producing a Dilithium signature.
+	_, err = SignMessageWithPrivateKeyAndAlgorithm([]byte("test"), skHex, crypto.AlgorithmMLDSA, []byte("test-context"))
+	if err == nil {
+		t.Fatal("SignMessageWithPrivateKeyAndAlgorithm(mldsa) expected error, got a signature (silent downgrade)")
+	}
+
+	// The CLI path with an ML-DSA key file must not silently fall back to
+	// Dilithium either.
+	_, err = SignMessageWithPrivateKeyAndAlgorithm([]byte("test"), skHex, crypto.AlgorithmMLDSA, nil)
+	if err == nil {
+		t.Fatal("SignMessageWithPrivateKeyAndAlgorithm(mldsa, no context) expected error, got a signature (silent downgrade)")
+	}
+
+	// Control: a genuine Dilithium private key still signs fine (backward compat).
+	dil, _ := crypto.NewKeypair(crypto.AlgorithmDilithium, nil)
+	dilSkHex := hex.EncodeToString(dil.GetSK())
+	sig, err := SignMessageWithPrivateKey([]byte("test"), dilSkHex)
+	if err != nil {
+		t.Fatalf("SignMessageWithPrivateKey() with Dilithium key error = %v", err)
+	}
+	if len(sig) == 0 {
+		t.Error("SignMessageWithPrivateKey() with Dilithium key returned empty signature")
+	}
+}
+
 func TestSignFileNonexistent(t *testing.T) {
 	hexseed := "d2003016f53e800092ecd8d8d3cb43208c73baf505f7710d1f4cee82c601f921"
 	_, err := SignFile("/nonexistent/file.txt", hexseed)

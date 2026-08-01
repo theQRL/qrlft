@@ -440,7 +440,7 @@ func main() {
 						}
 						var signature string
 						if isPrivateKey {
-							signature, err = sign.SignStringWithPrivateKey(files[0], privateKeyHex)
+							signature, err = sign.SignStringWithPrivateKeyAndAlgorithm(files[0], privateKeyHex, algorithm, context)
 						} else if algorithm == qcrypto.AlgorithmMLDSA {
 							signature, err = sign.SignStringWithAlgorithm(files[0], hexseed, algorithm, context)
 						} else {
@@ -476,7 +476,7 @@ func main() {
 						}
 						var signature string
 						if isPrivateKey {
-							signature, err = sign.SignFileWithPrivateKey(file, privateKeyHex)
+							signature, err = sign.SignFileWithPrivateKeyAndAlgorithm(file, privateKeyHex, algorithm, context)
 						} else if algorithm == qcrypto.AlgorithmMLDSA {
 							signature, err = sign.SignFileWithAlgorithm(file, hexseed, algorithm, context)
 						} else {

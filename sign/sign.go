@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/theQRL/go-qrllib/crypto/dilithium"
+	"github.com/theQRL/go-qrllib/crypto/ml_dsa_87"
 	"github.com/theQRL/qrlft/crypto"
 )
 
@@ -24,13 +25,38 @@ func SignMessage(message []byte, hexseed string) (string, error) {
 	return hex.EncodeToString(signature[:]), nil
 }
 
-// SignMessageWithPrivateKey signs a message using a private key (secret key) directly
+// SignMessageWithPrivateKey signs a message using a private key (secret key) directly.
+// The algorithm must match the key material: an ML-DSA-87 private key PEM is never
+// silently signed with Dilithium. Use SignMessageWithPrivateKeyAndAlgorithm when the
+// requested algorithm is known (as the CLI does).
 func SignMessageWithPrivateKey(message []byte, privateKeyHex string) (string, error) {
+	return SignMessageWithPrivateKeyAndAlgorithm(message, privateKeyHex, crypto.AlgorithmDilithium, nil)
+}
+
+// SignMessageWithPrivateKeyAndAlgorithm signs a message using a private key (secret key)
+// directly for the requested algorithm. The secret key length is validated against the
+// requested algorithm's constants, so an ML-DSA-87 secret key can never be fed to the
+// pre-FIPS Dilithium routine (which would silently drop the FIPS 204 context binding).
+func SignMessageWithPrivateKeyAndAlgorithm(message []byte, privateKeyHex, algorithm string, context []byte) (string, error) {
 	skBytes, err := hex.DecodeString(privateKeyHex)
 	if err != nil {
 		return "", errors.New("failed to decode private key: " + err.Error())
 	}
 	defer crypto.ZeroBytes(skBytes) // Zero decoded key bytes when done
+
+	if algorithm == crypto.AlgorithmMLDSA {
+		if len(skBytes) != ml_dsa_87.CRYPTO_SECRET_KEY_BYTES {
+			return "", errors.New("invalid ML-DSA-87 private key length")
+		}
+		if context == nil {
+			return "", errors.New("context is required for ML-DSA-87 (use --context flag)")
+		}
+		// go-qrllib currently has no public API to construct an ML-DSA-87 signer
+		// from a secret key (the FIPS 204 secret key is a one-way expansion of the
+		// seed, so the hexseed cannot be recovered from it). Fail closed rather
+		// than silently producing a context-less Dilithium signature.
+		return "", errors.New("ML-DSA-87 private key PEM signing is not supported yet; use the hexseed file (--keyfile=<name>.private.hexseed) instead")
+	}
 
 	if len(skBytes) != dilithium.CRYPTO_SECRET_KEY_BYTES {
 		return "", errors.New("invalid private key length")
@@ -62,7 +88,9 @@ func SignString(stringToSign string, hexseed string) (string, error) {
 	return SignMessage([]byte(stringToSign), hexseed)
 }
 
-// SignFileWithPrivateKey signs a file using a private key directly
+// SignFileWithPrivateKey signs a file using a private key directly (Dilithium, for
+// backward compatibility). Use SignFileWithPrivateKeyAndAlgorithm when the requested
+// algorithm is known (as the CLI does).
 func SignFileWithPrivateKey(filename string, privateKeyHex string) (string, error) {
 	message, err := readFile(filename)
 	if err != nil {
@@ -71,9 +99,27 @@ func SignFileWithPrivateKey(filename string, privateKeyHex string) (string, erro
 	return SignMessageWithPrivateKey(message, privateKeyHex)
 }
 
-// SignStringWithPrivateKey signs a string using a private key directly
+// SignFileWithPrivateKeyAndAlgorithm signs a file using a private key directly
+// for the requested algorithm.
+func SignFileWithPrivateKeyAndAlgorithm(filename, privateKeyHex, algorithm string, context []byte) (string, error) {
+	message, err := readFile(filename)
+	if err != nil {
+		return "", err
+	}
+	return SignMessageWithPrivateKeyAndAlgorithm(message, privateKeyHex, algorithm, context)
+}
+
+// SignStringWithPrivateKey signs a string using a private key directly (Dilithium, for
+// backward compatibility). Use SignStringWithPrivateKeyAndAlgorithm when the requested
+// algorithm is known (as the CLI does).
 func SignStringWithPrivateKey(stringToSign string, privateKeyHex string) (string, error) {
 	return SignMessageWithPrivateKey([]byte(stringToSign), privateKeyHex)
+}
+
+// SignStringWithPrivateKeyAndAlgorithm signs a string using a private key directly
+// for the requested algorithm.
+func SignStringWithPrivateKeyAndAlgorithm(stringToSign, privateKeyHex, algorithm string, context []byte) (string, error) {
+	return SignMessageWithPrivateKeyAndAlgorithm([]byte(stringToSign), privateKeyHex, algorithm, context)
 }
 
 // SignMessageWithSigner signs a message using a Signer interface
