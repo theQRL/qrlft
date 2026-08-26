@@ -69,7 +69,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-      - uses: go-semantic-release/action@453e003c94ddb9c64e7ea4153794ef69e477259e # v1
+      - uses: go-semantic-release/action@2e9dc4247a6004f8377781bef4cb9dad273a741f # v1
         id: semrel
         with:
           hooks: goreleaser
