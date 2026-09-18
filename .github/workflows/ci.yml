@@ -76,20 +76,24 @@ jobs:
           hooks: goreleaser
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Signs with ML-DSA-87
-        if: steps.semrel.outputs.version != ''
-        uses: theQRL/actions-mldsa-sign@97a05abefff417d595c28c7b5d9d886ebe2fe9d0 # v1.0.0
-        with:
-          patterns: |
-            dist/*.zip
-          hexseed: ${{ secrets.MLDSA_HEXSEED }}
-          context: qrlft-release-signatures
-          output: sig.txt
+      # Before signing: the manifest records the tag, and the action would
+      # otherwise default it to github.ref_name, a branch here.
       - uses: actions-ecosystem/action-get-latest-tag@b7c32daec3395a9616f88548363a42652b22d435 # v1
         if: steps.semrel.outputs.version != ''
         id: get-latest-tag
         with:
           semver_only: true
+      - name: Signs with ML-DSA-87
+        if: steps.semrel.outputs.version != ''
+        uses: theQRL/actions-mldsa-sign@266287af83f2b1a8ec4c6e13149d0ecf6cd16cc5 # v2.0.0
+        with:
+          patterns: |
+            dist/*.zip
+          hexseed: ${{ secrets.MLDSA_HEXSEED }}
+          context: qrlft-release-signatures
+          tag: ${{ steps.get-latest-tag.outputs.tag }}
+          output: sig.txt
+          manifest: qrlft_${{ steps.get-latest-tag.outputs.tag }}_manifest.json
       - name: Trim dist/ from signatures file
         if: steps.semrel.outputs.version != ''
         run: |
@@ -98,6 +102,6 @@ jobs:
         uses: AButler/upload-release-assets@34491005a5d7ec239a784e460807ce844fde7962 # v4.0.0
         if: steps.semrel.outputs.version != ''
         with:
-          files: qrlft_${{ steps.get-latest-tag.outputs.tag }}_signatures.txt
+          files: "qrlft_${{ steps.get-latest-tag.outputs.tag }}_signatures.txt;qrlft_${{ steps.get-latest-tag.outputs.tag }}_manifest.json;qrlft_${{ steps.get-latest-tag.outputs.tag }}_manifest.json.sig"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           release-tag: ${{ steps.get-latest-tag.outputs.tag }}
