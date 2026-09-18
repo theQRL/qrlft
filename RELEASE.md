@@ -10,6 +10,33 @@ This project uses [semantic-release](https://semantic-release.gitbook.io/) to au
 4. Changelog is generated
 5. GitHub release is created with binaries
 
+## Cryptographic dependencies
+
+ML-DSA-87 comes from [go-qrllib](https://github.com/theQRL/go-qrllib). Dilithium
+does not: go-qrllib removed it at v0.9.0, and qrlft still has to verify releases
+signed before FIPS 204 was finalised, so that implementation is vendored at
+[`internal/dilithium`](internal/dilithium) with the numeric helpers it needs in
+[`internal/lattice`](internal/lattice). Both are copied unchanged from go-qrllib
+v0.8.0 apart from their import paths. See
+[internal/dilithium/PROVENANCE.md](internal/dilithium/PROVENANCE.md).
+
+The split means go-qrllib can be followed forward without carrying a scheme it
+has finished with, and without stranding signatures already published.
+
+Bumping go-qrllib therefore affects ML-DSA-87 only. Two checks belong with any
+such bump, because neither is caught by the unit tests:
+
+1. Verify a signature published under the old version against the released
+   public key. Signature output changing is the failure that looks like a forged
+   download rather than a broken dependency.
+2. Confirm `sign -a mldsa` still emits 4627-byte signatures. ML-DSA-87 and
+   Dilithium5 differ only in signature length, 4627 against 4595, and share a
+   public key size.
+
+The vendored tree is frozen. Its upstream tests came with it and are the
+evidence it still behaves like the code that produced signatures now in the
+wild, so they are expected to keep passing untouched.
+
 ## Release Signing
 
 After goreleaser builds `dist/*.zip`, CI signs every archive with ML-DSA-87
@@ -18,12 +45,12 @@ result to the release as `qrlft_<tag>_signatures.txt`.
 
 - Context string: `qrlft-release-signatures` — signatures do not verify without it
 - Signing key: repository secret `MLDSA_HEXSEED` (the hexseed for
-  `qrlft-release-key.pub`, which is committed at the repo root)
+  `theqrl-release-key.pub`, which is committed at the repo root)
 
 Consumer-facing verification steps live in
 [README.md](README.md#verifying-a-release). Rotating the key means generating a
 new keypair with the same context, replacing the `MLDSA_HEXSEED` secret, and
-committing the new `qrlft-release-key.pub` — previously published signatures
+committing the new `theqrl-release-key.pub` — previously published signatures
 still verify only under the old key, so keep it available.
 
 ## Commit Message Format

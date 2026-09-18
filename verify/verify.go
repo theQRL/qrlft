@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/theQRL/go-qrllib/crypto/dilithium"
+	"github.com/theQRL/qrlft/v4/internal/dilithium"
 	"github.com/theQRL/qrlft/v4/crypto"
 )
 
