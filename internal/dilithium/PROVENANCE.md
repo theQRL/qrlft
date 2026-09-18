@@ -29,3 +29,22 @@ change. Anything new gets signed with ML-DSA-87.
 
 The upstream tests came with it and are expected to keep passing. They are the
 evidence that the copy still behaves like the code that made those signatures.
+
+## How CI treats it
+
+Linting and coverage skip this directory, and `internal/lattice` alongside it.
+That is not an exemption granted to make a build pass; it follows from the copy
+being frozen.
+
+`gosec` on lattice code reports the usual set of deliberate integer conversions
+and index arithmetic in NTT, packing and rounding, correct by construction
+within the scheme. Silencing them would mean annotating the files, and
+reformatting to satisfy `gofmt` would mean rewriting them. Either one breaks the
+property that a reader can diff this directory against go-qrllib v0.8.0 and see
+that nothing was slipped in, which is worth more here than a clean report on
+code nobody is allowed to change. A finding in this directory is an upstream
+finding.
+
+The coverage gate is qrlft's own standard for qrlft's own code. This code
+answers to the tests that came with it, which run under `make test` and
+`make test-race` like everything else.

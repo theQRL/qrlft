@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/theQRL/qrlft/v4/internal/dilithium"
 	"github.com/theQRL/go-qrllib/crypto/ml_dsa_87"
 	"github.com/theQRL/qrlft/v4/crypto"
+	"github.com/theQRL/qrlft/v4/internal/dilithium"
 )
 
 // SignMessage signs a message using a hexseed (Dilithium, for backward compatibility)

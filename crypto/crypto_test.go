@@ -487,6 +487,18 @@ func TestMLDSAVerifierVerifyWrongPKLength(t *testing.T) {
 	}
 }
 
+// A key of the right length that is not a well-formed key at all. go-qrllib
+// parses and validates before verifying from v0.10.0 onward, so this is
+// rejected on structure rather than reaching the signature check. The length
+// guard above cannot catch it, which is why it has a case of its own.
+func TestMLDSAVerifierVerifyUnparseablePublicKey(t *testing.T) {
+	verifier, _ := NewMLDSAVerifier(testContext)
+	zeroed := make([]byte, verifier.PublicKeySize())
+	if verifier.Verify([]byte("msg"), make([]byte, verifier.SignatureSize()), zeroed) {
+		t.Error("Verify() should return false for a public key that does not parse")
+	}
+}
+
 func TestMLDSAVerifierSizes(t *testing.T) {
 	verifier, _ := NewMLDSAVerifier(testContext)
 
