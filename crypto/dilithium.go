@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/theQRL/go-qrllib/crypto/dilithium"
+	"github.com/theQRL/qrlft/v4/internal/dilithium"
 )
 
 // DilithiumSigner implements the Signer interface for Dilithium

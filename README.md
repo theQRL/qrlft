@@ -224,7 +224,7 @@ every verification.
 
 ### Release public key
 
-The signing key is checked in as [`qrlft-release-key.pub`](qrlft-release-key.pub):
+The signing key is checked in as [`theqrl-release-key.pub`](theqrl-release-key.pub):
 
 ```
 -----BEGIN PUBLIC KEY-----
@@ -299,7 +299,7 @@ SIG=$(grep " $FILE\$" qrlft_v4.1.0_signatures.txt | cut -d' ' -f1)
 qrlft verify -a mldsa \
   --context="qrlft-release-signatures" \
   --signature="$SIG" \
-  --pkfile=qrlft-release-key.pub \
+  --pkfile=theqrl-release-key.pub \
   "$FILE"
 ```
 

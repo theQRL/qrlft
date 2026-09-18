@@ -6,7 +6,10 @@ qrlft.exe
 *.prof
 *.test
 
-# Release signing key material - never commit these.
-# The matching public key (qrlft-release-key.pub) is committed on purpose.
+# Release signing key material - never commit these. Both naming generations
+# are listed so a local copy under either name stays ignored.
+# The matching public key (theqrl-release-key.pub) is committed on purpose.
 /qrlft-release-key
 /qrlft-release-key.private.hexseed
+/theqrl-release-key
+/theqrl-release-key.private.hexseed

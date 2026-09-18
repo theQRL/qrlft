@@ -139,10 +139,16 @@ func (v *MLDSAVerifier) Verify(message, signature, publicKey []byte) bool {
 	var sigArray [ml_dsa_87.CRYPTO_BYTES]uint8
 	copy(sigArray[:], signature)
 
-	var pkArray [ml_dsa_87.CRYPTO_PUBLIC_KEY_BYTES]uint8
-	copy(pkArray[:], publicKey)
+	// go-qrllib takes a parsed key rather than raw bytes from v0.10.0 onward,
+	// and parsing rejects structurally invalid keys before any verification is
+	// attempted. A key that will not parse cannot have signed anything, so this
+	// is the same answer the check would have reached anyway.
+	pk, err := ml_dsa_87.ParsePublicKey(publicKey)
+	if err != nil {
+		return false
+	}
 
-	return ml_dsa_87.Verify(v.ctx, message, sigArray, &pkArray)
+	return ml_dsa_87.Verify(v.ctx, message, sigArray, pk)
 }
 
 // SignatureSize returns the expected signature size

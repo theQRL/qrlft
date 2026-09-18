@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/theQRL/go-qrllib/crypto/dilithium"
 	"github.com/theQRL/qrlft/v4/crypto"
+	"github.com/theQRL/qrlft/v4/internal/dilithium"
 )
 
 // VerifyFile verifies a signature against a file (Dilithium, for backward compatibility)

@@ -20,7 +20,26 @@ linters:
         linters:
           - gosec
 
+      # internal/dilithium and internal/lattice are vendored from go-qrllib
+      # v0.8.0 and deliberately left byte-identical to it apart from their
+      # import paths, so that anyone can diff them against upstream and see
+      # that nothing was slipped in. Reformatting or annotating them would
+      # destroy exactly that property.
+      #
+      # What gosec reports there is the usual lattice-cryptography set:
+      # deliberate integer conversions and index arithmetic in NTT, packing
+      # and rounding, correct by construction within the scheme. Re-reporting
+      # them on every run of code nobody is allowed to change says nothing.
+      # Anything found in them is an upstream finding, not a qrlft one.
+      - path: 'internal/(dilithium|lattice)/'
+        linters:
+          - gosec
+
 formatters:
   enable:
     - gofmt
     - goimports
+  exclusions:
+    paths:
+      - 'internal/dilithium'
+      - 'internal/lattice'
