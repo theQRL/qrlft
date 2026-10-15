@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -419,4 +421,168 @@ func TestAppValidationAndIOErrors(t *testing.T) {
 			}
 		}
 	}
+}
+
+// runExit runs the app and returns the exit code and message of the ExitCoder it produced.
+func runExit(t *testing.T, args ...string) (int, string) {
+	t.Helper()
+	err := runApp(args)
+	var coder cli.ExitCoder
+	if !errors.As(err, &coder) {
+		t.Fatalf("runApp(%q) = %v, want ExitCoder", args, err)
+	}
+	return coder.ExitCode(), coder.Error()
+}
+
+// captureStdout returns everything fn writes to os.Stdout.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+	fn()
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestSignRequiresAFile(t *testing.T) {
+	tempDir := t.TempDir()
+	doc := filepath.Join(tempDir, "doc.txt")
+	if err := os.WriteFile(doc, []byte("document"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	subdir := filepath.Join(tempDir, "dir")
+	if err := os.Mkdir(subdir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	sign := func(paths ...string) (int, string) {
+		t.Helper()
+		args := []string{"qrlft", "sign", "-a", "dilithium", "--hexseed=" + testHexseed}
+		return runExit(t, append(args, paths...)...)
+	}
+	for _, tc := range []struct {
+		name     string
+		paths    []string
+		wantCode int
+	}{
+		{"missing path", []string{filepath.Join(tempDir, "missing.txt")}, 82},
+		{"pattern matching nothing", []string{filepath.Join(tempDir, "nomatch*.txt")}, 82},
+		{"directory only", []string{subdir}, 82},
+		{"directory then file", []string{subdir, doc}, 0},
+		{"file", []string{doc}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if code, msg := sign(tc.paths...); code != tc.wantCode {
+				t.Fatalf("sign(%q) = %d %q, want exit %d", tc.paths, code, msg, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestVerifyChecksEveryPath(t *testing.T) {
+	tempDir := t.TempDir()
+	write := func(name, content string) string {
+		t.Helper()
+		path := filepath.Join(tempDir, name)
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	signed := write("signed.txt", "document")
+	copyOfSigned := write("copy.txt", "document")
+	other := write("other.txt", "different document")
+	subdir := filepath.Join(tempDir, "dir")
+	if err := os.Mkdir(subdir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(tempDir, "missing.txt")
+
+	signer, err := qcrypto.NewSigner(qcrypto.AlgorithmDilithium, testHexseed, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pk := hex.EncodeToString(signer.GetPK())
+	sig, err := sign.SignFileWithAlgorithm(signed, testHexseed, qcrypto.AlgorithmDilithium, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sigFile := write("signature.txt", sig)
+
+	verify := func(paths ...string) (int, string) {
+		t.Helper()
+		args := []string{"qrlft", "verify", "-a", "dilithium", "--signature=" + sig, "--publickey=" + pk}
+		return runExit(t, append(args, paths...)...)
+	}
+
+	cases := []struct {
+		name     string
+		paths    []string
+		wantCode int
+		wantMsg  string
+	}{
+		{"single signed file", []string{signed}, 0, "Signature is valid"},
+		{"single unsigned file", []string{other}, 1, "Signature is not valid"},
+		{"signed file then unsigned file", []string{signed, other}, 1, "Signature is not valid"},
+		{"unsigned file then signed file", []string{other, signed}, 1, "Signature is not valid"},
+		{"signed file and an identical copy", []string{signed, copyOfSigned}, 0, "Signature is valid"},
+		{"directory then signed file", []string{subdir, signed}, 0, "Signature is valid"},
+		{"directory only", []string{subdir}, 82, "No file to verify"},
+		{"signed file then missing path", []string{signed, missing}, 78, "Error when verifying " + missing},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, msg := verify(tc.paths...)
+			if code != tc.wantCode || msg != tc.wantMsg {
+				t.Fatalf("verify(%q) = %d %q, want %d %q", tc.paths, code, msg, tc.wantCode, tc.wantMsg)
+			}
+		})
+	}
+
+	t.Run("per-file lines only when more than one path", func(t *testing.T) {
+		got := captureStdout(t, func() { verify(signed, other) })
+		want := signed + ": OK\n" + other + ": FAILED\n"
+		if got != want {
+			t.Fatalf("stdout = %q, want %q", got, want)
+		}
+		if got := captureStdout(t, func() { verify(signed) }); got != "" {
+			t.Fatalf("single-path stdout = %q, want empty", got)
+		}
+	})
+
+	t.Run("signature from file", func(t *testing.T) {
+		code, msg := runExit(t, "qrlft", "verify", "-a", "dilithium", "--sigfile="+sigFile, "--publickey="+pk, signed, other)
+		if code != 1 || msg != "Signature is not valid" {
+			t.Fatalf("verify = %d %q, want 1 %q", code, msg, "Signature is not valid")
+		}
+	})
+
+	t.Run("mldsa", func(t *testing.T) {
+		context := []byte("test")
+		mlSigner, err := qcrypto.NewSigner(qcrypto.AlgorithmMLDSA, testHexseed, context)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mlSig, err := sign.SignFileWithAlgorithm(signed, testHexseed, qcrypto.AlgorithmMLDSA, context)
+		if err != nil {
+			t.Fatal(err)
+		}
+		args := []string{"qrlft", "verify", "-a", "mldsa", "--context=test", "--signature=" + mlSig, "--publickey=" + hex.EncodeToString(mlSigner.GetPK())}
+		if code, _ := runExit(t, append(args, signed, other)...); code != 1 {
+			t.Fatalf("mldsa verify of signed then unsigned = exit %d, want 1", code)
+		}
+		if code, _ := runExit(t, append(args, signed, copyOfSigned)...); code != 0 {
+			t.Fatalf("mldsa verify of signed and identical copy = exit %d, want 0", code)
+		}
+	})
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/theQRL/go-qrllib/crypto/ml_dsa_87"
@@ -167,14 +168,21 @@ func readFile(filename string) ([]byte, error) {
 		return nil, errors.New("file is a directory")
 	}
 
-	filesize := fileinfo.Size()
-	buffer := make([]byte, filesize)
-
-	bytesread, err := file.Read(buffer)
-	if err != nil {
-		//coverage:ignore reason=statistically-unreachable
-		//rationale: exact-size read of a statted regular file fails only under external mutation
-		return nil, err
+	// Read until EOF: a single Read may return fewer bytes than requested.
+	data := make([]byte, 0, fileinfo.Size())
+	for {
+		if len(data) == cap(data) {
+			data = append(data, 0)[:len(data)]
+		}
+		n, err := file.Read(data[len(data):cap(data)])
+		data = data[:len(data)+n]
+		if err == io.EOF {
+			return data, nil
+		}
+		if err != nil {
+			//coverage:ignore reason=statistically-unreachable
+			//rationale: reading a just-opened regular file fails only under external mutation
+			return nil, err
+		}
 	}
-	return buffer[:bytesread], nil
 }

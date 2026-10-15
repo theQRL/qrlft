@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -297,6 +298,165 @@ func TestDilithiumSignVerify(t *testing.T) {
 	_, _, err = runCmd(t, "verify", "--signature="+wrongSig, "--publickey="+publicKey, "-a", "dilithium", testFile)
 	if err == nil {
 		t.Error("expected verification to fail with wrong signature")
+	}
+}
+
+// TestVerifyMultipleFiles checks that every file listed is verified and that
+// the exit code reflects all of them.
+func TestVerifyMultipleFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "qrlft-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	signedFile := filepath.Join(tempDir, "signed.txt")
+	if err := os.WriteFile(signedFile, []byte("Hello, World!"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	otherFile := filepath.Join(tempDir, "other.txt")
+	if err := os.WriteFile(otherFile, []byte("Goodbye, World!"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	emptyDir := filepath.Join(tempDir, "dir")
+	if err := os.Mkdir(emptyDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout := mustRun(t, "new", "-a", "dilithium", "-p")
+	hexseedRe := regexp.MustCompile(`Hexseed:\s*\n(0x[0-9a-fA-F]+|[0-9a-fA-F]+)`)
+	matches := hexseedRe.FindStringSubmatch(stdout)
+	if len(matches) < 2 {
+		t.Fatal("could not extract hexseed")
+	}
+	hexseed := strings.TrimSpace(matches[1])
+	pkRe := regexp.MustCompile(`Public Key:\s*\n([0-9a-fA-F]+)`)
+	pkMatches := pkRe.FindStringSubmatch(stdout)
+	if len(pkMatches) < 2 {
+		t.Fatal("could not extract public key")
+	}
+	publicKey := strings.TrimSpace(pkMatches[1])
+
+	signature := strings.TrimSpace(mustRun(t, "sign", "--hexseed="+hexseed, "-a", "dilithium", "--quiet", signedFile))
+
+	exitCode := func(t *testing.T, err error) int {
+		t.Helper()
+		if err == nil {
+			return 0
+		}
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return exitErr.ExitCode()
+	}
+
+	for _, tc := range []struct {
+		name       string
+		files      []string
+		wantCode   int
+		wantStderr string
+		wantStdout string
+	}{
+		{"signed then unsigned", []string{signedFile, otherFile}, 1, "Signature is not valid", signedFile + ": OK\n" + otherFile + ": FAILED\n"},
+		{"unsigned then signed", []string{otherFile, signedFile}, 1, "Signature is not valid", otherFile + ": FAILED\n" + signedFile + ": OK\n"},
+		{"directory only", []string{emptyDir}, 82, "No file to verify", ""},
+		{"signed only", []string{signedFile}, 0, "Signature is valid", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append([]string{"verify", "--signature=" + signature, "--publickey=" + publicKey, "-a", "dilithium"}, tc.files...)
+			stdout, stderr, err := runCmd(t, args...)
+			if got := exitCode(t, err); got != tc.wantCode {
+				t.Errorf("exit code = %d, want %d\nstdout: %s\nstderr: %s", got, tc.wantCode, stdout, stderr)
+			}
+			if !strings.Contains(stderr, tc.wantStderr) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr, tc.wantStderr)
+			}
+			if stdout != tc.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tc.wantStdout)
+			}
+		})
+	}
+}
+
+// TestSignatureCoversWholeFile signs a file larger than 1 GiB and checks that
+// a change after that offset, or an appended byte, invalidates the signature.
+func TestSignatureCoversWholeFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("signs and verifies a file just over 1 GiB")
+	}
+	tempDir, err := os.MkdirTemp("", "qrlft-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	const boundary = int64(1 << 30)
+	largeFile := filepath.Join(tempDir, "large.bin")
+	f, err := os.Create(largeFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteAt([]byte("tail-of-the-file"), boundary); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout := mustRun(t, "new", "-a", "dilithium", "-p")
+	hexseedRe := regexp.MustCompile(`Hexseed:\s*\n(0x[0-9a-fA-F]+|[0-9a-fA-F]+)`)
+	matches := hexseedRe.FindStringSubmatch(stdout)
+	if len(matches) < 2 {
+		t.Fatal("could not extract hexseed")
+	}
+	hexseed := strings.TrimSpace(matches[1])
+	pkRe := regexp.MustCompile(`Public Key:\s*\n([0-9a-fA-F]+)`)
+	pkMatches := pkRe.FindStringSubmatch(stdout)
+	if len(pkMatches) < 2 {
+		t.Fatal("could not extract public key")
+	}
+	publicKey := strings.TrimSpace(pkMatches[1])
+
+	signature := strings.TrimSpace(mustRun(t, "sign", "--hexseed="+hexseed, "-a", "dilithium", "--quiet", largeFile))
+	verify := func() error {
+		t.Helper()
+		_, _, err := runCmd(t, "verify", "--signature="+signature, "--publickey="+publicKey, "-a", "dilithium", largeFile)
+		return err
+	}
+	if err := verify(); err != nil {
+		t.Fatalf("unmodified file should verify: %v", err)
+	}
+
+	f, err = os.OpenFile(largeFile, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteAt([]byte("T"), boundary); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := verify(); err == nil {
+		t.Error("a byte changed after the first GiB should invalidate the signature")
+	}
+
+	f, err = os.OpenFile(largeFile, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteAt([]byte("t"), boundary); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteAt([]byte("+"), boundary+int64(len("tail-of-the-file"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := verify(); err == nil {
+		t.Error("an appended byte should invalidate the signature")
 	}
 }
 

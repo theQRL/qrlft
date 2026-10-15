@@ -97,6 +97,13 @@ qrlft verify -a dilithium --signature=abc123... --publickey=def456... document.t
 qrlft verify -a mldsa --context="myapp" --sigfile=document.sig --pkfile=mykey.pub document.txt
 ```
 
+`Signature is valid` with exit code 0 means the file matches the signature;
+`Signature is not valid` with exit code 1 means it does not. When more than one
+path is given, every file is checked against the same signature, a `<file>: OK`
+or `<file>: FAILED` line is printed per file, and the exit code is 0 only if
+all of them match. Directories are skipped; if nothing was checked the command
+exits 82.
+
 ### Extract Public Key
 
 ```bash

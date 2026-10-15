@@ -5,6 +5,7 @@ import (
 	b64 "encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -91,11 +92,10 @@ func readKeyFromFile(filepath string) (string, string, error) {
 		return "", "", fmt.Errorf("key file %s is a directory", filepath)
 	}
 
-	filebuffer := make([]byte, fileinfo.Size())
-	_, err = file.Read(filebuffer)
+	filebuffer, err := io.ReadAll(file)
 	if err != nil {
 		//coverage:ignore reason=statistically-unreachable
-		//rationale: exact-size read of a statted key file fails only under external mutation
+		//rationale: reading a just-opened regular file fails only under external mutation
 		return "", "", fmt.Errorf("could not read key file %s: %w", filepath, err)
 	}
 
@@ -196,11 +196,10 @@ func readPublicKeyFromFile(filepath string) (string, string, error) {
 		return "", "", fmt.Errorf("public key file %s is a directory", filepath)
 	}
 
-	pkfilebuffer := make([]byte, fileinfo.Size())
-	_, err = file.Read(pkfilebuffer)
+	pkfilebuffer, err := io.ReadAll(file)
 	if err != nil {
 		//coverage:ignore reason=statistically-unreachable
-		//rationale: exact-size read of a statted public-key file fails only under external mutation
+		//rationale: reading a just-opened regular file fails only under external mutation
 		return "", "", fmt.Errorf("could not read public key file %s: %w", filepath, err)
 	}
 
@@ -321,6 +320,7 @@ func newApp() *cli.App {
 						context = []byte(contextStr) // Allow context for dilithium too (ignored)
 					}
 
+					checked, failed := 0, 0
 					for _, file := range files {
 						file := file
 
@@ -358,11 +358,10 @@ func newApp() *cli.App {
 							if sigfileinfo.IsDir() {
 								return cli.Exit("Could not open signature file "+ctx.String("sigfile")+" - is it a folder?", 72)
 							}
-							sigfilebuffer := make([]byte, sigfileinfo.Size())
-							_, err = sigfile.Read(sigfilebuffer)
+							sigfilebuffer, err := io.ReadAll(sigfile)
 							if err != nil {
 								//coverage:ignore reason=statistically-unreachable
-								//rationale: exact-size read of a statted signature file fails only under external mutation
+								//rationale: reading a just-opened regular signature file fails only under external mutation
 								return cli.Exit("Could not read signature file "+ctx.String("sigfile"), 69)
 							}
 							signature = strings.TrimSpace(string(sigfilebuffer))
@@ -393,14 +392,25 @@ func newApp() *cli.App {
 							fmt.Printf("Error: %v\n", err)
 							return cli.Exit("Error when verifying "+file, 79)
 						}
-						if verified {
-							return cli.Exit("Signature is valid", 0)
-						}
+						checked++
 						if !verified {
-							return cli.Exit("Signature is not valid", 1)
+							failed++
+						}
+						if len(files) > 1 {
+							result := "OK"
+							if !verified {
+								result = "FAILED"
+							}
+							fmt.Printf("%s: %s\n", file, result)
 						}
 					}
-					return cli.Exit("", 0)
+					if checked == 0 {
+						return cli.Exit("No file to verify", 82)
+					}
+					if failed > 0 {
+						return cli.Exit("Signature is not valid", 1)
+					}
+					return cli.Exit("Signature is valid", 0)
 				},
 			},
 			{
@@ -503,8 +513,13 @@ func newApp() *cli.App {
 						return cli.Exit("No file provided", 82)
 					}
 					if len(files) == 1 {
-						files, _ = filepath.Glob(files[0])
+						pattern := files[0]
+						files, _ = filepath.Glob(pattern)
+						if len(files) == 0 {
+							return cli.Exit("No file matched "+pattern, 82)
+						}
 					}
+					signed := 0
 					for _, file := range files {
 						file := file
 
@@ -537,6 +552,10 @@ func newApp() *cli.App {
 							return cli.Exit("Error when signing "+file+": "+err.Error(), 79)
 						}
 						output(file, signature, ctx.Bool("quiet"))
+						signed++
+					}
+					if signed == 0 {
+						return cli.Exit("No file to sign", 82)
 					}
 					return cli.Exit("", 0)
 				},
