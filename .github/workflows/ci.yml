@@ -85,7 +85,7 @@ jobs:
           semver_only: true
       - name: Signs with ML-DSA-87
         if: steps.semrel.outputs.version != ''
-        uses: theQRL/actions-mldsa-sign@266287af83f2b1a8ec4c6e13149d0ecf6cd16cc5 # v2.0.0
+        uses: theQRL/actions-mldsa-sign@4d9a45b39b989ea244c88fc217fcda794ae94026 # v3.0.0
         with:
           patterns: |
             dist/*.zip
