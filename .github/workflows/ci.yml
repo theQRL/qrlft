@@ -54,7 +54,7 @@ jobs:
         run: make coverage
       - name: Upload coverage to Codecov
         if: github.repository == 'theQRL/qrlft'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.out
@@ -85,7 +85,7 @@ jobs:
           semver_only: true
       - name: Signs with ML-DSA-87
         if: steps.semrel.outputs.version != ''
-        uses: theQRL/actions-mldsa-sign@266287af83f2b1a8ec4c6e13149d0ecf6cd16cc5 # v2.0.0
+        uses: theQRL/actions-mldsa-sign@4d9a45b39b989ea244c88fc217fcda794ae94026 # v3.0.0
         with:
           patterns: |
             dist/*.zip
